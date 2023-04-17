@@ -1,15 +1,15 @@
 use async_trait::async_trait;
-use client::{proto::iocompat::AsyncIoTokioAsStd, tcp::TcpClientStream};
-use tokio::net::{TcpStream as TokioTcpStream, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use tokio::net::UdpSocket;
 use trust_dns_server::{
-	client,
-	client::client::AsyncClient,
+	client::client::AsyncDnssecClient,
+	proto::quic::QuicClientStream,
 	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 	ServerFuture as Server
 };
 
 struct Handler {
-	client: AsyncClient
+	client: AsyncDnssecClient
 }
 
 #[async_trait]
@@ -27,14 +27,13 @@ impl RequestHandler for Handler {
 
 #[tokio::main]
 async fn async_main() {
-	let (stream, sender) = TcpClientStream::<AsyncIoTokioAsStd<TokioTcpStream>>::new(
-		([8, 8, 8, 8], 53).into()
-	);
-	let client = AsyncClient::new(stream, sender, None);
-	// await the connection to be established
-	let (client, bg) = client
-		.await
-		.expect("connection to upstream dns server failed");
+	let (client, bg) = AsyncDnssecClient::builder(QuicClientStream::builder().build(
+		SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
+		"1dot1dot1dot1.cloudflare-dns.com".into()
+	))
+	.build()
+	.await
+	.expect("connection to upstream dns server failed");
 	// make sure to run the background task
 	tokio::spawn(bg);
 

@@ -1,0 +1,25 @@
+edition = "2018"
+max_width = 90
+newline_style = "Unix"
+unstable_features = true
+
+# always use tabs.
+hard_tabs = true
+tab_spaces = 4
+
+# commas inbetween but not after
+match_block_trailing_comma = true
+trailing_comma = "Never"
+
+# misc
+format_code_in_doc_comments = true
+format_macro_matchers = true
+imports_granularity = "Crate"
+use_field_init_shorthand = true
+use_try_shorthand = true
+
+# condense Struct { _, _ } to Struct { .. }
+condense_wildcard_suffixes = true
+
+# prefer foo(Bar { \n }) over foo(\nBar { \n }\n)
+overflow_delimited_expr = true

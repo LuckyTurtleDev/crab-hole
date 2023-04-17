@@ -1,31 +1,24 @@
+use async_trait::async_trait;
 use client::{proto::iocompat::AsyncIoTokioAsStd, tcp::TcpClientStream};
 use tokio::net::{TcpStream as TokioTcpStream, UdpSocket};
 use trust_dns_server::{
-	client, client::client::AsyncClient, server::RequestHandler, ServerFuture as Server
+	client,
+	client::client::AsyncClient,
+	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
+	ServerFuture as Server
 };
 
 struct Handler {
 	client: AsyncClient
 }
 
+#[async_trait]
 impl RequestHandler for Handler {
-	fn handle_request<'life0, 'life1, 'async_trait, R>(
-		&'life0 self,
-		request: &'life1 trust_dns_server::server::Request,
-		response_handle: R
-	) -> core::pin::Pin<
-		Box<
-			dyn core::future::Future<Output = trust_dns_server::server::ResponseInfo>
-				+ core::marker::Send
-				+ 'async_trait
-		>
-	>
-	where
-		R: 'async_trait + trust_dns_server::server::ResponseHandler,
-		'life0: 'async_trait,
-		'life1: 'async_trait,
-		Self: 'async_trait
-	{
+	async fn handle_request<R: ResponseHandler>(
+		&self,
+		request: &Request,
+		response_handler: R
+	) -> ResponseInfo {
 		let query = request.request_info().query;
 		println!("{query:?}");
 		unimplemented!()

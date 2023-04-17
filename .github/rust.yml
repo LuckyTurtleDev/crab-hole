@@ -1,0 +1,48 @@
+name: Rust
+
+on:
+  push:
+  pull_request:
+  release:
+    types: [released]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        id: "rust-toolchain"
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
+      - run: cargo test --workspace --all-features --release
+        env:
+          RUST_BACKTRACE: 1
+          TG_BOT_KEY: ${{ secrets.TG_BOT_KEY }}
+
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  cargo_publish:
+    if: ${{ github.event_name == 'release' }}
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: msrd0/cargo-publish-action@v1
+        with: 
+          packages: crab-hole
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

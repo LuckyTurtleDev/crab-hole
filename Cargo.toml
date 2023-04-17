@@ -3,6 +3,6 @@ name = "crab-hole"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+tokio = { version = "1.27.0", features = ["parking_lot", "rt-multi-thread", "macros", "net"] }
+trust-dns-server = { version = "0.22.0", features = ["dnssec-ring", "dns-over-rustls"] }

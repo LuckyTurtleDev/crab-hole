@@ -1,12 +1,19 @@
 use async_trait::async_trait;
+use rustls::{OwnedTrustAnchor, RootCertStore};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tokio::net::UdpSocket;
 use trust_dns_server::{
 	client::client::AsyncDnssecClient,
-	proto::quic::QuicClientStream,
+	proto::{
+		https::{HttpsClientStream, HttpsClientStreamBuilder},
+		quic::QuicClientStream
+	},
+	resolver::config::TlsClientConfig,
 	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 	ServerFuture as Server
 };
+use webpki::TrustAnchor;
+use webpki_roots::TLS_SERVER_ROOTS;
 
 struct Handler {
 	client: AsyncDnssecClient
@@ -27,13 +34,44 @@ impl RequestHandler for Handler {
 
 #[tokio::main]
 async fn async_main() {
-	let (client, bg) = AsyncDnssecClient::builder(QuicClientStream::builder().build(
+	// convert the webpki root certificates to rustls format
+	let root_store = RootCertStore {
+		roots: TLS_SERVER_ROOTS
+			.0
+			.iter()
+			.map(
+				|TrustAnchor {
+				     subject,
+				     spki,
+				     name_constraints
+				 }| {
+					OwnedTrustAnchor::from_subject_spki_name_constraints(
+						*subject,
+						*spki,
+						*name_constraints
+					)
+				}
+			)
+			.collect()
+	};
+
+	// create a tls config for the upstream client
+	let tls_config = rustls::ClientConfig::builder()
+		.with_safe_defaults()
+		.with_root_certificates(root_store)
+		.with_no_client_auth();
+
+	// create the upstream client
+	let mut client_stream_builder = QuicClientStream::builder();
+	client_stream_builder.crypto_config(tls_config);
+	let client_stream = client_stream_builder.build(
 		SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
 		"1dot1dot1dot1.cloudflare-dns.com".into()
-	))
-	.build()
-	.await
-	.expect("connection to upstream dns server failed");
+	);
+	let (client, bg) = AsyncDnssecClient::builder(client_stream)
+		.build()
+		.await
+		.expect("connection to upstream dns server failed");
 	// make sure to run the background task
 	tokio::spawn(bg);
 
@@ -50,6 +88,5 @@ async fn async_main() {
 }
 
 fn main() {
-	println!("Hello, world!");
 	async_main();
 }

@@ -65,8 +65,8 @@ async fn async_main() {
 	let mut client_stream_builder = QuicClientStream::builder();
 	client_stream_builder.crypto_config(tls_config);
 	let client_stream = client_stream_builder.build(
-		SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 443),
-		"1dot1dot1dot1.cloudflare-dns.com".into()
+		SocketAddr::new(IpAddr::V4(Ipv4Addr::new(94, 140, 14, 140)), 853),
+		"unfiltered.adguard-dns.com".into()
 	);
 	let (client, bg) = AsyncDnssecClient::builder(client_stream)
 		.build()

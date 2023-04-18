@@ -1,4 +1,4 @@
-edition = "2018"
+edition = "2021"
 max_width = 90
 newline_style = "Unix"
 unstable_features = true
@@ -11,10 +11,15 @@ tab_spaces = 4
 match_block_trailing_comma = true
 trailing_comma = "Never"
 
-# misc
+# fix my imports for me
+imports_granularity = "Crate"
+#group_imports = "One"
+
+# format everything
 format_code_in_doc_comments = true
 format_macro_matchers = true
-imports_granularity = "Crate"
+
+# don't keep outdated syntax
 use_field_init_shorthand = true
 use_try_shorthand = true
 
@@ -23,3 +28,8 @@ condense_wildcard_suffixes = true
 
 # prefer foo(Bar { \n }) over foo(\nBar { \n }\n)
 overflow_delimited_expr = true
+
+# I wish there was a way to allow 0..n but not a + 1..b + 2
+# However, the later looks so terible that I use spaces everywhere
+# https://github.com/rust-lang/rustfmt/issues/3367
+spaces_around_ranges = true

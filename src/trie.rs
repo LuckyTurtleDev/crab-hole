@@ -1,9 +1,10 @@
-use std::{collections::HashMap as Map, iter::Rev};
+use nohash_hasher::BuildNoHashHasher;
+use std::{collections::HashMap as Map, default, iter::Rev};
 
 #[derive(Default)]
 struct Node {
 	is_in: bool,
-	childs: Map<u8, Node>
+	childs: Map<u8, Node, BuildNoHashHasher<u8>>
 }
 
 impl Node {
@@ -55,9 +56,7 @@ pub struct Trie {
 
 impl Trie {
 	pub fn new() -> Self {
-		Trie {
-			root: Node::default()
-		}
+		Trie::default()
 	}
 
 	pub fn insert(&mut self, domain: &str) {
@@ -104,8 +103,8 @@ mod tests {
 		assert!(!tree.contains("xample.com", true));
 		assert!(!tree.contains("example.co", true));
 		assert!(!tree.contains("eexample.com", true));
-		//tree.insert("eexample.com");
-		//assert!(tree.contains("eexample.com", true));
+		tree.insert("eexample.com");
+		assert!(tree.contains("eexample.com", true));
 
 		assert!(tree.contains("foo.example.com", true));
 		assert!(!tree.contains("foo.example.com", false));

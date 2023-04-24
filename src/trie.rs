@@ -28,13 +28,13 @@ impl Node {
 	) -> bool {
 		match iter.next() {
 			None => self.is_in,
-			Some(ch) => match self.childs.get(&ch) {
-				None => false,
-				Some(child) => {
-					if include_subdomains && self.is_in && (ch == '.' as u8) {
-						return true;
-					}
-					child.contains(iter, include_subdomains)
+			Some(ch) => {
+				if include_subdomains && self.is_in && (ch == b'.') {
+					return true;
+				}
+				match self.childs.get(&ch) {
+					None => false,
+					Some(child) => child.contains(iter, include_subdomains)
 				}
 			}
 		}
@@ -48,6 +48,7 @@ impl Node {
 	}
 }
 
+#[derive(Default)]
 pub struct Trie {
 	root: Node
 }
@@ -74,5 +75,39 @@ impl Trie {
 
 	pub fn shrink_to_fit(&mut self) {
 		self.root.shrink_to_fit();
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::Trie;
+
+	#[test]
+	fn simple() {
+		let mut tree = Trie::new();
+		assert!(!tree.contains("example.com", false));
+		tree.insert("example.com");
+		assert!(tree.contains("example.com", false));
+		assert!(!tree.contains("xample.com", false));
+		assert!(!tree.contains("example.co", false));
+		assert!(!tree.contains("eexample.com", false));
+		tree.insert("eexample.com");
+		assert!(tree.contains("eexample.com", false));
+	}
+
+	#[test]
+	fn sub_domain() {
+		let mut tree = Trie::new();
+		assert!(!tree.contains("example.com", true));
+		tree.insert("example.com");
+		assert!(tree.contains("example.com", true));
+		assert!(!tree.contains("xample.com", true));
+		assert!(!tree.contains("example.co", true));
+		assert!(!tree.contains("eexample.com", true));
+		//tree.insert("eexample.com");
+		//assert!(tree.contains("eexample.com", true));
+
+		assert!(tree.contains("foo.example.com", true));
+		assert!(!tree.contains("foo.example.com", false));
 	}
 }

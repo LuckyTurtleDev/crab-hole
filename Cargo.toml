@@ -6,8 +6,9 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
-rustls = "0.20.6"
-rustls-webpki = "0.100.1"
-tokio = { version = "1.27.0", features = ["parking_lot", "rt-multi-thread", "macros", "net"] }
-trust-dns-server = { version = "0.22.0", features = ["dnssec-ring", "dns-over-rustls", "dns-over-quic", "dns-over-https"] }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.27", features = ["parking_lot", "rt-multi-thread", "macros", "net"] }
+toml = { package = "basic-toml", version = "0.1" }
+trust-dns-proto = "0.22"
+trust-dns-server = { version = "0.22", features = ["dnssec-ring", "dns-over-rustls", "dns-over-quic", "dns-over-https"] }
 webpki-roots = "0.23"

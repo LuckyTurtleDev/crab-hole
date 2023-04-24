@@ -11,4 +11,3 @@ tokio = { version = "1.27", features = ["parking_lot", "rt-multi-thread", "macro
 toml = { package = "basic-toml", version = "0.1" }
 trust-dns-proto = "0.22"
 trust-dns-server = { version = "0.22", features = ["dnssec-ring", "dns-over-rustls", "dns-over-quic", "dns-over-https"] }
-webpki-roots = "0.23"

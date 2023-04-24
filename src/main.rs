@@ -1,20 +1,35 @@
 use async_trait::async_trait;
-use rustls::{OwnedTrustAnchor, RootCertStore};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use serde::Deserialize;
+use std::{fs, sync::Arc};
 use tokio::net::UdpSocket;
+use trust_dns_proto::rr::Name;
 use trust_dns_server::{
-	client::client::AsyncDnssecClient,
-	proto::{op::Query, quic::QuicClientStream, xfer::DnsRequestOptions, DnsHandle},
+	authority::{Catalog, ZoneType},
 	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
+	store::forwarder::{ForwardAuthority, ForwardConfig},
 	ServerFuture as Server
 };
-use webpki::TrustAnchor;
-use webpki_roots::TLS_SERVER_ROOTS;
 
 mod trie;
 
 struct Handler {
-	client: AsyncDnssecClient
+	catalog: Catalog
+}
+
+impl Handler {
+	fn new(config: &ForwardConfig) -> Self {
+		let zone_name = Name::root();
+		let authority = ForwardAuthority::try_from_config(
+			zone_name.clone(),
+			ZoneType::Forward,
+			config
+		)
+		.expect("Failed to create forwarder");
+
+		let mut catalog = Catalog::new();
+		catalog.upsert(zone_name.into(), Box::new(Arc::new(authority)));
+		Self { catalog }
+	}
 }
 
 #[async_trait]
@@ -22,75 +37,37 @@ impl RequestHandler for Handler {
 	async fn handle_request<R: ResponseHandler>(
 		&self,
 		request: &Request,
-		response_handler: R
+		response_handle: R
 	) -> ResponseInfo {
 		let lower_query = request.request_info().query;
 		println!("{lower_query:?}");
-		let mut query = Query::new();
-		query.set_name(lower_query.name().into());
-		query.set_query_type(query.query_type());
-		query.set_query_class(query.query_class());
-		let mut client = self.client.clone();
-		let mut respond = client.lookup(query, DnsRequestOptions::default());
-		unimplemented!()
+
+		self.catalog.handle_request(request, response_handle).await
 	}
 }
 
 #[tokio::main]
-async fn async_main() {
-	// convert the webpki root certificates to rustls format
-	let root_store = RootCertStore {
-		roots: TLS_SERVER_ROOTS
-			.0
-			.iter()
-			.map(
-				|TrustAnchor {
-				     subject,
-				     spki,
-				     name_constraints
-				 }| {
-					OwnedTrustAnchor::from_subject_spki_name_constraints(
-						*subject,
-						*spki,
-						*name_constraints
-					)
-				}
-			)
-			.collect()
-	};
-
-	// create a tls config for the upstream client
-	let tls_config = rustls::ClientConfig::builder()
-		.with_safe_defaults()
-		.with_root_certificates(root_store)
-		.with_no_client_auth();
-
-	// create the upstream client
-	let mut client_stream_builder = QuicClientStream::builder();
-	client_stream_builder.crypto_config(tls_config);
-	let client_stream = client_stream_builder.build(
-		SocketAddr::new(IpAddr::V4(Ipv4Addr::new(94, 140, 14, 140)), 853),
-		"unfiltered.adguard-dns.com".into()
-	);
-	let (client, bg) = AsyncDnssecClient::builder(client_stream)
-		.build()
-		.await
-		.expect("connection to upstream dns server failed");
-	// make sure to run the background task
-	tokio::spawn(bg);
-
-	let upd_socket = UdpSocket::bind("0.0.0.0:8080")
+async fn async_main(config: Config) {
+	let udp_socket = UdpSocket::bind("[::]:8080")
 		.await
 		.expect("failed to bind udp socket");
-	let handler = Handler { client };
+	let handler = Handler::new(&config.upstream);
 	let mut server = Server::new(handler);
-	server.register_socket(upd_socket);
+	server.register_socket(udp_socket);
 	server
 		.block_until_done()
 		.await
 		.expect("failed to run dns server");
 }
 
+#[derive(Deserialize)]
+struct Config {
+	upstream: ForwardConfig
+}
+
 fn main() {
-	async_main();
+	let config = fs::read("config.toml").expect("Failed to read config");
+	let config: Config = toml::from_slice(&config).expect("Failed to deserialize config");
+
+	async_main(config);
 }

@@ -4,11 +4,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tokio::net::UdpSocket;
 use trust_dns_server::{
 	client::client::AsyncDnssecClient,
-	proto::{
-		https::{HttpsClientStream, HttpsClientStreamBuilder},
-		quic::QuicClientStream
-	},
-	resolver::config::TlsClientConfig,
+	proto::{op::Query, quic::QuicClientStream, xfer::DnsRequestOptions, DnsHandle},
 	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 	ServerFuture as Server
 };
@@ -26,8 +22,14 @@ impl RequestHandler for Handler {
 		request: &Request,
 		response_handler: R
 	) -> ResponseInfo {
-		let query = request.request_info().query;
-		println!("{query:?}");
+		let lower_query = request.request_info().query;
+		println!("{lower_query:?}");
+		let mut query = Query::new();
+		query.set_name(lower_query.name().into());
+		query.set_query_type(query.query_type());
+		query.set_query_class(query.query_class());
+		let mut client = self.client.clone();
+		let mut respond = client.lookup(query, DnsRequestOptions::default());
 		unimplemented!()
 	}
 }

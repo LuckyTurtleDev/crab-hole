@@ -1,3 +1,8 @@
+#![warn(rust_2018_idioms, unreachable_pub)]
+#![forbid(elided_lifetimes_in_paths, unsafe_code)]
+
+mod parser;
+
 use async_trait::async_trait;
 use serde::Deserialize;
 use std::{fs, sync::Arc};
@@ -37,8 +42,8 @@ impl RequestHandler for Handler {
 		request: &Request,
 		response_handle: R
 	) -> ResponseInfo {
-		let lower_query = request.request_info().query;
-		println!("{lower_query:?}");
+		let host = request.request_info().query.name().to_string();
+		println!("{host}");
 
 		self.catalog.handle_request(request, response_handle).await
 	}

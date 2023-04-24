@@ -1,3 +1,8 @@
+[blocklist]
+lists = [
+	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts"
+]
+
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1111]:853"
 protocol = "tls"

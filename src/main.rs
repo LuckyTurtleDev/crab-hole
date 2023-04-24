@@ -10,6 +10,8 @@ use trust_dns_server::{
 	ServerFuture as Server
 };
 
+mod trie;
+
 struct Handler {
 	catalog: Catalog
 }

@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
+nohash-hasher = "0.2.0"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.27", features = ["parking_lot", "rt-multi-thread", "macros", "net"] }
 toml = { package = "basic-toml", version = "0.1" }

@@ -11,6 +11,8 @@ use trust_dns_server::{
 use webpki::TrustAnchor;
 use webpki_roots::TLS_SERVER_ROOTS;
 
+mod trie;
+
 struct Handler {
 	client: AsyncDnssecClient
 }

@@ -2,11 +2,14 @@ use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Deserialize;
-use std::{fs, sync::Arc};
+use std::{fs, iter, sync::Arc};
 use tokio::net::UdpSocket;
-use trust_dns_proto::rr::Name;
+use trust_dns_proto::{
+	op::{header::Header, response_code::ResponseCode},
+	rr::Name
+};
 use trust_dns_server::{
-	authority::{Catalog, ZoneType},
+	authority::{Catalog, MessageResponseBuilder, ZoneType},
 	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 	store::forwarder::{ForwardAuthority, ForwardConfig},
 	ServerFuture as Server
@@ -50,7 +53,7 @@ impl RequestHandler for Handler {
 	async fn handle_request<R: ResponseHandler>(
 		&self,
 		request: &Request,
-		response_handle: R
+		mut response_handler: R
 	) -> ResponseInfo {
 		let lower_query = request.request_info().query;
 		println!("{lower_query:?}");
@@ -60,10 +63,23 @@ impl RequestHandler for Handler {
 			.await
 		{
 			println!("blocked");
-			println!("todo");
+			let mut header = Header::response_from_request(request.header());
+			header.set_response_code(ResponseCode::NXDomain);
+			response_handler
+				.send_response(
+					MessageResponseBuilder::from_message_request(request).build(
+						header,
+						iter::empty(),
+						iter::empty(),
+						iter::empty(),
+						iter::empty()
+					)
+				)
+				.await
+				.unwrap();
 		}
 
-		self.catalog.handle_request(request, response_handle).await
+		self.catalog.handle_request(request, response_handler).await
 	}
 }
 

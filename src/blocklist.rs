@@ -1,4 +1,5 @@
 use crate::{trie::Trie, CLIENT};
+use anyhow::Context;
 use std::path::PathBuf;
 use tokio::{
 	fs::{read_to_string, write},
@@ -36,38 +37,61 @@ impl BlockList {
 				path += query;
 			}
 			let path = PathBuf::from("./data").join(path); //TODO: make this config able and create path
-			let raw_list = if path.exists() && use_cache {
-				println!("use cache for {url}");
-				read_to_string(path).await.unwrap()
-			} else {
+			let raw_list = if !path.exists() || !use_cache {
 				println!("download {url}");
-				let resp = CLIENT
-					.get(url.to_owned())
-					.send()
-					.await
-					.unwrap()
-					.error_for_status()
-					.unwrap()
-					.text()
-					.await
-					.unwrap();
-				write(path, &resp).await.unwrap();
-				resp
+				let resp: anyhow::Result<String> = (|| async {
+					//try block
+					let resp = CLIENT
+						.get(url.to_owned())
+						.send()
+						.await?
+						.error_for_status()?
+						.text()
+						.await?;
+					write(&path, &resp).await.unwrap();
+					Ok(resp)
+				})()
+				.await;
+				match resp.with_context(|| format!("error downloading {url}")) {
+					Ok(value) => Some(value),
+					Err(err) => {
+						eprintln!("{err}");
+						None
+					}
+				}
+			} else {
+				None
 			};
-			println!("TODO prase raw_list and at to trie");
+			let raw_list = match raw_list {
+				Some(value) => Some(value),
+				None => {
+					if path.exists() {
+						println!("use cache for {url}");
+						match read_to_string(&path)
+							.await
+							.with_context(|| format!("error reading file {path:?}"))
+						{
+							Ok(value) => Some(value),
+							Err(err) => {
+								eprintln!("{err}");
+								None
+							}
+						}
+					} else {
+						None
+					}
+				},
+			};
+			if raw_list.is_none() {
+				eprintln!("skipp list {url}");
+			}
+			//TODO PRASE
 		}
-
-		println!("shrink trie");
 		trie.shrink_to_fit();
-		println!("WARNING IF EMPTY");
-		let mut guard = self.trie.write().await;
-		*guard = trie;
-		drop(guard);
-		println!("shrink trie");
+		println!("finish updating block list");
 	}
 
 	pub async fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
-		let guard = self.trie.read().await;
-		guard.contains(domain, include_subdomains)
+		self.trie.read().await.contains(domain, include_subdomains)
 	}
 }

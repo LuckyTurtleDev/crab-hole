@@ -65,7 +65,7 @@ impl RequestHandler for Handler {
 			println!("blocked");
 			let mut header = Header::response_from_request(request.header());
 			header.set_response_code(ResponseCode::NXDomain);
-			response_handler
+			return response_handler
 				.send_response(
 					MessageResponseBuilder::from_message_request(request).build(
 						header,
@@ -76,7 +76,7 @@ impl RequestHandler for Handler {
 					)
 				)
 				.await
-				.unwrap();
+				.unwrap(); //when does this fail?
 		}
 
 		self.catalog.handle_request(request, response_handler).await

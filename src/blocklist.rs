@@ -55,7 +55,7 @@ impl BlockList {
 				match resp.with_context(|| format!("error downloading {url}")) {
 					Ok(value) => Some(value),
 					Err(err) => {
-						eprintln!("{err}");
+						eprintln!("{err:?}");
 						None
 					}
 				}
@@ -73,7 +73,7 @@ impl BlockList {
 						{
 							Ok(value) => Some(value),
 							Err(err) => {
-								eprintln!("{err}");
+								eprintln!("{err:?}");
 								None
 							}
 						}

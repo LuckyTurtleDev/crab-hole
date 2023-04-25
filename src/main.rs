@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Deserialize;
-use std::{fs, iter, sync::Arc};
-use tokio::net::UdpSocket;
+use std::{fs, iter, sync::Arc, time::Duration};
+use tokio::{net::UdpSocket, time::sleep};
 use trust_dns_proto::{
 	op::{header::Header, response_code::ResponseCode},
 	rr::Name
@@ -25,7 +25,7 @@ static CLIENT: Lazy<Client> = Lazy::new(|| Client::new());
 
 struct Handler {
 	catalog: Catalog,
-	blocklist: BlockList
+	blocklist: Arc<BlockList>
 }
 
 impl Handler {
@@ -44,7 +44,10 @@ impl Handler {
 		let blocklist = BlockList::new();
 		blocklist.update(adlist, true).await;
 
-		Self { catalog, blocklist }
+		Self {
+			catalog,
+			blocklist: Arc::new(blocklist)
+		}
 	}
 }
 
@@ -89,8 +92,18 @@ async fn async_main(config: Config) {
 		.await
 		.expect("failed to bind udp socket");
 	let handler = Handler::new(&config.upstream, &config.blocklist.lists).await;
+	let blocklist = handler.blocklist.clone();
+	tokio::spawn(async {
+		let blocklist = blocklist;
+		let lists = config.blocklist.lists;
+		loop {
+			blocklist.update(&lists, false).await;
+			sleep(Duration::from_secs(7200)).await; //2h
+		}
+	});
 	let mut server = Server::new(handler);
 	server.register_socket(udp_socket);
+	println!("start dns server");
 	server
 		.block_until_done()
 		.await

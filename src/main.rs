@@ -1,4 +1,6 @@
 use async_trait::async_trait;
+use once_cell::sync::Lazy;
+use reqwest::Client;
 use serde::Deserialize;
 use std::{fs, sync::Arc};
 use tokio::net::UdpSocket;
@@ -9,15 +11,22 @@ use trust_dns_server::{
 	store::forwarder::{ForwardAuthority, ForwardConfig},
 	ServerFuture as Server
 };
+use url::Url;
 
 mod trie;
 
+mod blocklist;
+use blocklist::BlockList;
+
+static CLIENT: Lazy<Client> = Lazy::new(|| Client::new());
+
 struct Handler {
-	catalog: Catalog
+	catalog: Catalog,
+	blocklist: BlockList
 }
 
 impl Handler {
-	fn new(config: &ForwardConfig) -> Self {
+	async fn new(config: &ForwardConfig, adlist: &Vec<Url>) -> Self {
 		let zone_name = Name::root();
 		let authority = ForwardAuthority::try_from_config(
 			zone_name.clone(),
@@ -28,7 +37,11 @@ impl Handler {
 
 		let mut catalog = Catalog::new();
 		catalog.upsert(zone_name.into(), Box::new(Arc::new(authority)));
-		Self { catalog }
+
+		let blocklist = BlockList::new();
+		blocklist.update(adlist, true).await;
+
+		Self { catalog, blocklist }
 	}
 }
 
@@ -41,6 +54,14 @@ impl RequestHandler for Handler {
 	) -> ResponseInfo {
 		let lower_query = request.request_info().query;
 		println!("{lower_query:?}");
+		if self
+			.blocklist
+			.contains(&lower_query.to_string(), true)
+			.await
+		{
+			println!("blocked");
+			println!("todo");
+		}
 
 		self.catalog.handle_request(request, response_handle).await
 	}
@@ -51,7 +72,7 @@ async fn async_main(config: Config) {
 	let udp_socket = UdpSocket::bind("[::]:8080")
 		.await
 		.expect("failed to bind udp socket");
-	let handler = Handler::new(&config.upstream);
+	let handler = Handler::new(&config.upstream, &config.blocklist.lists).await;
 	let mut server = Server::new(handler);
 	server.register_socket(udp_socket);
 	server
@@ -62,7 +83,14 @@ async fn async_main(config: Config) {
 
 #[derive(Deserialize)]
 struct Config {
-	upstream: ForwardConfig
+	upstream: ForwardConfig,
+	blocklist: BlockConfig
+}
+
+#[derive(Deserialize)]
+struct BlockConfig {
+	lists: Vec<Url>,
+	inculde_subdomains: bool
 }
 
 fn main() {

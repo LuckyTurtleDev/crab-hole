@@ -7,6 +7,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.70"
 async-trait = "0.1"
+directories = "5.0.0"
 log = "0.4.17"
 my-env-logger-style = { version = "0.1.0", git = "https://github.com/LuckyTurtleDev/my-env-logger-style.git" }
 nohash-hasher = "0.2.0"

@@ -1,9 +1,9 @@
-use crate::{trie::Trie, CLIENT};
+use crate::{trie::Trie, CLIENT, LIST_DIR};
 use anyhow::Context;
 use log::{error, info};
 use std::path::PathBuf;
 use tokio::{
-	fs::{read_to_string, write},
+	fs::{create_dir_all, read_to_string, write},
 	sync::RwLock
 };
 use url::Url;
@@ -26,6 +26,12 @@ impl BlockList {
 		} else {
 			info!("updating blocklist");
 		}
+		if let Err(err) = create_dir_all(&*LIST_DIR)
+			.await
+			.with_context(|| format!("failed create dir {:?}", LIST_DIR.as_path()))
+		{
+			error!("{err:?}");
+		}
 		let mut trie = Trie::new();
 
 		for url in adlist {
@@ -37,7 +43,7 @@ impl BlockList {
 				path += "--";
 				path += query;
 			}
-			let path = PathBuf::from("./data").join(path); //TODO: make this config able and create path
+			let path = PathBuf::from(&*LIST_DIR).join(path);
 			let raw_list = if !path.exists() || !restore_from_cache {
 				info!("downloading {url}");
 				let resp: anyhow::Result<String> = (|| async {
@@ -49,7 +55,12 @@ impl BlockList {
 						.error_for_status()?
 						.text()
 						.await?;
-					write(&path, &resp).await.unwrap();
+					if let Err(err) = write(&path, &resp)
+						.await
+						.with_context(|| format!("failed to save to {path:?}"))
+					{
+						error!("{err:?}");
+					}
 					Ok(resp)
 				})()
 				.await;

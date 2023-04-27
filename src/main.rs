@@ -26,21 +26,30 @@ static PROJECT_DIRS: Lazy<ProjectDirs> = Lazy::new(|| {
 		.expect("failed to get project dirs")
 });
 static LIST_DIR: Lazy<PathBuf> = Lazy::new(|| {
-	if let Ok(var) = var(format!("{}_DIR", CARGO_PKG_NAME.to_uppercase().replace('-', "_"))) {
+	if let Ok(var) = var(format!(
+		"{}_DIR",
+		CARGO_PKG_NAME.to_uppercase().replace('-', "_")
+	)) {
 		PathBuf::from(var).join("lists")
 	} else {
 		PROJECT_DIRS.cache_dir().to_owned()
 	}
 });
 
-static CONFIG_PATH: Lazy<PathBuf> = Lazy::new(||  if let Ok(var) =var(format!("{}_DIR", CARGO_PKG_NAME.to_uppercase().replace('-', "_"))) {
-	PathBuf::from(var)
-} else {
-	#[cfg(not(debug_assertions))]
-	return PROJECT_DIRS.config_dir().to_owned(); //rust wants a ; here
-	#[cfg(debug_assertions)]
-	PathBuf::new()	
-}.join("config.toml"));
+static CONFIG_PATH: Lazy<PathBuf> = Lazy::new(|| {
+	if let Ok(var) = var(format!(
+		"{}_DIR",
+		CARGO_PKG_NAME.to_uppercase().replace('-', "_")
+	)) {
+		PathBuf::from(var)
+	} else {
+		#[cfg(not(debug_assertions))]
+		return PROJECT_DIRS.config_dir().to_owned(); //rust wants a ; here
+		#[cfg(debug_assertions)]
+		PathBuf::new()
+	}
+	.join("config.toml")
+});
 
 static CLIENT: Lazy<Client> = Lazy::new(|| Client::new());
 
@@ -154,8 +163,8 @@ fn main() {
 	Lazy::force(&LIST_DIR);
 	my_env_logger_style::just_log();
 	info!("           🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
-	let config =
-		fs::read(&*CONFIG_PATH).unwrap_or_else(|_| panic!("Failed to read {:?} config", CONFIG_PATH.as_path()));
+	let config = fs::read(&*CONFIG_PATH)
+		.unwrap_or_else(|_| panic!("Failed to read {:?} config", CONFIG_PATH.as_path()));
 	let config: Config = toml::from_slice(&config).expect("Failed to deserialize config");
 	async_main(config);
 }

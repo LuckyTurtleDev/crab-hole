@@ -1,8 +1,9 @@
 use async_trait::async_trait;
+use log::{debug, info};
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Deserialize;
-use std::{fs, iter, sync::Arc, time::Duration};
+use std::{fs, io::Write, iter, sync::Arc, time::Duration};
 use tokio::{net::UdpSocket, time::sleep};
 use trust_dns_proto::{
 	op::{header::Header, response_code::ResponseCode},
@@ -59,13 +60,12 @@ impl RequestHandler for Handler {
 		mut response_handler: R
 	) -> ResponseInfo {
 		let lower_query = request.request_info().query;
-		println!("{lower_query:?}");
 		if self
 			.blocklist
 			.contains(&lower_query.to_string(), true)
 			.await
 		{
-			println!("blocked");
+			debug!("blocked: {lower_query:?}");
 			let mut header = Header::response_from_request(request.header());
 			header.set_response_code(ResponseCode::NXDomain);
 			return response_handler
@@ -80,6 +80,8 @@ impl RequestHandler for Handler {
 				)
 				.await
 				.unwrap(); //when does this fail?
+		} else {
+			debug!("{lower_query:?}");
 		}
 
 		self.catalog.handle_request(request, response_handler).await
@@ -103,7 +105,7 @@ async fn async_main(config: Config) {
 	});
 	let mut server = Server::new(handler);
 	server.register_socket(udp_socket);
-	println!("start dns server");
+	info!("🚀 start dns server");
 	server
 		.block_until_done()
 		.await
@@ -125,6 +127,6 @@ struct BlockConfig {
 fn main() {
 	let config = fs::read("config.toml").expect("Failed to read config");
 	let config: Config = toml::from_slice(&config).expect("Failed to deserialize config");
-
+	my_env_logger_style::just_log();
 	async_main(config);
 }

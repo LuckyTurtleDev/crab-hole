@@ -1,5 +1,6 @@
 use crate::{trie::Trie, CLIENT};
 use anyhow::Context;
+use log::{error, info};
 use std::path::PathBuf;
 use tokio::{
 	fs::{read_to_string, write},
@@ -21,9 +22,9 @@ impl BlockList {
 	///if `use_cache` is set true, cached list, will not be redownloaded (faster init)
 	pub async fn update(&self, adlist: &Vec<Url>, restore_from_cache: bool) {
 		if restore_from_cache {
-			println!("restore blocklist, from cache");
+			info!("restore blocklist, from cache");
 		} else {
-			println!("updating blocklist");
+			info!("updating blocklist");
 		}
 		let mut trie = Trie::new();
 
@@ -38,7 +39,7 @@ impl BlockList {
 			}
 			let path = PathBuf::from("./data").join(path); //TODO: make this config able and create path
 			let raw_list = if !path.exists() || !restore_from_cache {
-				println!("download {url}");
+				info!("downloading {url}");
 				let resp: anyhow::Result<String> = (|| async {
 					//try block
 					let resp = CLIENT
@@ -55,7 +56,7 @@ impl BlockList {
 				match resp.with_context(|| format!("error downloading {url}")) {
 					Ok(value) => Some(value),
 					Err(err) => {
-						eprintln!("{err:?}");
+						error!("{err:?}");
 						None
 					}
 				}
@@ -66,14 +67,14 @@ impl BlockList {
 				Some(value) => Some(value),
 				None => {
 					if path.exists() {
-						println!("use cache for {url}");
+						info!("restore from cache {url}");
 						match read_to_string(&path)
 							.await
 							.with_context(|| format!("error reading file {path:?}"))
 						{
 							Ok(value) => Some(value),
 							Err(err) => {
-								eprintln!("{err:?}");
+								error!("{err:?}");
 								None
 							}
 						}
@@ -83,16 +84,16 @@ impl BlockList {
 				},
 			};
 			if raw_list.is_none() {
-				eprintln!("skipp list {url}");
+				error!("skipp list {url}");
 			}
 			//TODO PRASE
 		}
-		println!("shrink list");
+		info!("shrink blocklist");
 		trie.shrink_to_fit();
 		let mut guard = self.trie.write().await;
 		*guard = trie;
 		drop(guard);
-		println!("finish updating block list");
+		info!("finish updating blocklist");
 	}
 
 	pub async fn contains(&self, domain: &str, include_subdomains: bool) -> bool {

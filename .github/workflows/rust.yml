@@ -57,3 +57,5 @@ jobs:
       uses: LuckyTurtleDev/easy-docker-action@main
       with:
         ghcr_password: ${{ secrets.GITHUB_TOKEN }}
+        platforms: linux/amd64,linux/arm/v6
+        

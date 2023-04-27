@@ -20,7 +20,7 @@ jobs:
             ~/.cargo/registry
             target
           key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cargo test --workspace --all-features --release
+      - run: cargo test --workspace --all-features
         env:
           RUST_BACKTRACE: 1
           TG_BOT_KEY: ${{ secrets.TG_BOT_KEY }}

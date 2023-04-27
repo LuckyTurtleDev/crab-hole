@@ -46,3 +46,14 @@ jobs:
           packages: crab-hole
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          
+  docker:
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v3
+    - name: docker
+      uses: LuckyTurtleDev/easy-docker-action@main
+      with:
+        ghcr_password: ${{ secrets.GITHUB_TOKEN }}

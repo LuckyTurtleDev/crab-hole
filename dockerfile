@@ -3,6 +3,6 @@ WORKDIR /app
 COPY . /app
 RUN cargo build --release
 
-FROM scratch
+FROM gcr.io/distroless/cc
 COPY --from=builder /app/target/release/crab-hole /
-CMD ["/crab-hole"]
+CMD ["./crab-hole"]

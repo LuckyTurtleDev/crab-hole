@@ -15,7 +15,7 @@ RUN apk update \
 RUN set -eux; \
     if [[ $TARGETPLATFORM == "linux/amd64" ]]; then target="x86_64-unknown-linux-musl"; fi; \
     if [[ $TARGETPLATFORM == "linux/arm/v7" ]]; then target="armv7-unknown-linux-musleabihf"; fi; \
-    if [[ $TARGETPLATFORM == "linux/arm64/v8" ]]; then target="aarch64-unknown-linux-musl"; fi; \
+    if [[ $TARGETPLATFORM == "linux/arm64" ]]; then target="aarch64-unknown-linux-musl"; fi; \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | /bin/bash -s -- -y --default-host $target
 ENV PATH "$PATH:/root/.cargo/bin"
 WORKDIR /app

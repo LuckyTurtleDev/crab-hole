@@ -77,9 +77,8 @@ jobs:
   
   docker:
     runs-on: ubuntu-latest
-    needs: [test]
     steps:
-    - name: Checkout repository and submodules
+    - name: Checkout repository
       uses: actions/checkout@v3
     - name: docker
       uses: LuckyTurtleDev/easy-docker-action@main

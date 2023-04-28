@@ -11,7 +11,9 @@ RUN apk update \
     perl \
     zlib-dev \
     zstd-dev
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | /bin/bash -s -- -y
+RUN set -eux; \
+    if [[ $TARGETPLATFORM == "linux/amd64" ]]; then toolchain="x86_64-unknown-linux-musl"; fi; \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | /bin/bash -s -- -y --default-toolchain $toolchain
 ENV PATH "$PATH:/root/.cargo/bin"
 WORKDIR /app
 COPY . /app

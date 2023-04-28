@@ -86,3 +86,4 @@ jobs:
         ghcr_password: ${{ secrets.GITHUB_TOKEN }}
         platforms: linux/amd64,linux/arm64/v8
         max_parallelism: 1
+

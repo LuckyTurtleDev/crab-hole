@@ -5,6 +5,7 @@ RUN apk update \
     musl-dev \
     bash \
     cargo \
+    curl \
     curl-dev \
     openssl-dev>3 \
     perl \

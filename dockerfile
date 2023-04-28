@@ -4,9 +4,13 @@ RUN apk update \
  && apk add --no-cache musl-dev
 WORKDIR /app
 COPY . /app
-RUN cargo build --release
+RUN \
+    --mount=type=cache,target=/app/target \
+    cargo build --release \
+ && cp /app/target/release/crab-hole /crab-hole
+
 
 FROM scratch
 ENV CRAB_HOLE_DIR=/data
-COPY --from=builder /app/target/release/crab-hole /
+COPY --from=builder /crab-hole /
 CMD ["./crab-hole"]

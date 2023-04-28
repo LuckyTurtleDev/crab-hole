@@ -23,7 +23,6 @@ jobs:
       - run: cargo test --workspace --all-features
         env:
           RUST_BACKTRACE: 1
-          TG_BOT_KEY: ${{ secrets.TG_BOT_KEY }}
 
   rustfmt:
     runs-on: ubuntu-latest
@@ -46,10 +45,36 @@ jobs:
           packages: crab-hole
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          
-  docker:
+  
+  github_publish:
     runs-on: ubuntu-latest
     needs: [test]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        id: "rust-toolchain"
+        with:
+          toolchain: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,armv7-unknown-linux-musleabihf
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: "${{runner.os}} Rust release ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
+      - run: cargo build --release --target x86_64-unknown-linux-musl
+        env:
+          RUST_BACKTRACE: 1
+      - run: cargo build --release --target aarch64-unknown-linux-musl
+        env:
+          RUST_BACKTRACE: 1
+      - run: cargo build --release --target armv7-unknown-linux-musleabihf
+        env:
+          RUST_BACKTRACE: 1
+  
+  docker:
+    runs-on: ubuntu-latest
+    needs: [github_publish]
     steps:
     - name: Checkout repository and submodules
       uses: actions/checkout@v3

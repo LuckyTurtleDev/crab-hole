@@ -23,7 +23,6 @@ jobs:
       - run: cargo test --workspace --all-features
         env:
           RUST_BACKTRACE: 1
-          TG_BOT_KEY: ${{ secrets.TG_BOT_KEY }}
 
   rustfmt:
     runs-on: ubuntu-latest
@@ -52,26 +51,13 @@ jobs:
     needs: [test]
     steps:
       - uses: actions/checkout@v3
-      - name: Install musl
-        run: sudo apt-get update && sudo apt-get install -y musl-dev musl-tools
       - uses: dtolnay/rust-toolchain@stable
         id: "rust-toolchain"
+      - name: install cross
+        uses: baptiste0928/cargo-install@v2
         with:
-          target: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,armv7-unknown-linux-musleabihf
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/git
-            ~/.cargo/registry
-            target
-          key: "${{runner.os}} Rust release ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cargo build --release --target x86_64-unknown-linux-musl
-        env:
-          RUST_BACKTRACE: 1
-      - run: cargo build --release --target aarch64-unknown-linux-musl
-        env:
-          RUST_BACKTRACE: 1
-      - run: cargo build --release --target armv7-unknown-linux-musleabihf
+          crate: cross
+      - run: cross build --all-features --target armv7-unknown-linux-gnueabihf
         env:
           RUST_BACKTRACE: 1
   

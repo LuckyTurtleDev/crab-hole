@@ -57,12 +57,13 @@ jobs:
         uses: baptiste0928/cargo-install@v2
         with:
           crate: cross
-      - run: cross build --all-features --target armv7-unknown-linux-gnueabihf
+      - run: cross build --all-features --target armv7-unknown-linux-musleabihf
         env:
           RUST_BACKTRACE: 1
   
   docker:
     runs-on: ubuntu-latest
+    needs: [github_publish]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3

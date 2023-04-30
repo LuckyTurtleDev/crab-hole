@@ -85,7 +85,7 @@ jobs:
         os: [ubuntu, windows, macos]
     continue-on-error: true
     name: github_publish_${{ matrix.os }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}-latest
     needs: [test]
     steps:
       - uses: actions/checkout@v3

@@ -76,10 +76,11 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: "${{ matrix.target }}"
-          path: /target/${{ matrix.target }}/release/crab-hole
+          #path: /target/${{ matrix.target }}/release/crab-hole
   
   docker:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'release' }}
     needs: [github_publish]
     steps:
     - name: Checkout repository

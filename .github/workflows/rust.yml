@@ -73,4 +73,8 @@ jobs:
         ghcr_password: ${{ secrets.GITHUB_TOKEN }}
         platforms: linux/amd64,linux/arm64/v8,linux/arm/v7
         max_parallelism: 1
+    - name: 'Upload Artifact'
+      uses: actions/upload-artifact@v3
+      with:
+        path: target
 

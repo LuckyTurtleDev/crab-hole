@@ -72,7 +72,6 @@ jobs:
       - run: cross build --release --all-features --target ${{ matrix.target }} --target-dir ${{ matrix.target }}
         env:
           RUST_BACKTRACE: 1
-      - run: tree target
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v3
         with:

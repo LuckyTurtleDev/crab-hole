@@ -79,13 +79,9 @@ jobs:
           name: "${{ matrix.target }}"
           path: target/${{ matrix.target }}/release/crab-hole
   
-  github_publish:
-    strategy:
-      matrix:
-        os: [macos]
-    continue-on-error: true
+  github_publish_x86_64-apple-darwin:
     name: github_publish_${{ matrix.os }}
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: matrix.os-latest
     needs: [test]
     steps:
       - uses: actions/checkout@v3
@@ -104,7 +100,7 @@ jobs:
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v3
         with:
-          name: "${{runner.os}}"
+          name: x86_64-apple-darwin
           path: target/release/crab-hole
   
   docker:

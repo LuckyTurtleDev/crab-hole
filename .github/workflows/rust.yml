@@ -93,7 +93,7 @@ jobs:
         id: "rust-toolchain"
       - run: |-
           echo "target=$(rustc -vV | sed -n 's|host: ||p')" >> "$GITHUB_OUTPUT"
-        id: default_target
+        id: defaulttarget
       - uses: actions/cache@v3
         with:
           path: |
@@ -108,7 +108,7 @@ jobs:
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v3
         with:
-          name: "${{ default_target.target }}"
+          name: "${{ defaulttarget.target }}"
           path: target/release/crab-hole
   
   docker:

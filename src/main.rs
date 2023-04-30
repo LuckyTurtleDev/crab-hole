@@ -56,7 +56,7 @@ static CONFIG_PATH: Lazy<PathBuf> = Lazy::new(|| {
 	.join("config.toml")
 });
 
-static CLIENT: Lazy<Client> = Lazy::new(|| Client::new());
+static CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
 mod trie;
 
@@ -98,7 +98,7 @@ impl RequestHandler for Handler {
 		request: &Request,
 		mut response_handler: R
 	) -> ResponseInfo {
-		let host = request.request_info().query.name().to_string();
+		let lower_query = request.request_info().query;
 		if self
 			.blocklist
 			.contains(&lower_query.to_string(), true)
@@ -160,7 +160,7 @@ struct Config {
 #[derive(Deserialize)]
 struct BlockConfig {
 	lists: Vec<Url>,
-	inculde_subdomains: bool
+	include_subdomains: bool
 }
 
 fn main() {

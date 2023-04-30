@@ -49,7 +49,7 @@ jobs:
   github_publish:
     strategy:
       matrix:
-        target: [armv7-unknown-linux-musleabihf, aarch64-unknown-linux-musl]
+        target: [i686-unknown-linux-gnu, x86_64-unknown-linux-musl, arm-unknown-linux-musleabihf, armv7-unknown-linux-musleabihf, aarch64-unknown-linux-musl]
     continue-on-error: true
     name: github_publish_${{ matrix.target }}
     runs-on: ubuntu-latest
@@ -80,16 +80,18 @@ jobs:
   
   docker:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'release' }}
     needs: [github_publish]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
+    - uses: actions/download-artifact@v3
+      with:
+        path: github_artifacts
     - name: docker
       uses: LuckyTurtleDev/easy-docker-action@main
       with:
         ghcr_password: ${{ secrets.GITHUB_TOKEN }}
-        platforms: linux/amd64,linux/arm64/v8,linux/arm/v7
+        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8
         max_parallelism: 1
 
 

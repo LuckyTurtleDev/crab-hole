@@ -46,7 +46,7 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
   
-  github_publish:
+  github_publish_cross:
     strategy:
       matrix:
         target: [i686-unknown-linux-musl, x86_64-unknown-linux-musl, arm-unknown-linux-musleabihf, armv7-unknown-linux-musleabihf, aarch64-unknown-linux-musl]
@@ -68,7 +68,7 @@ jobs:
             ~/.cargo/git
             ~/.cargo/registry
             target
-          key: "${{runner.os}} Target ${{ matrix.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
+          key: "${{runner.os}} Target ${{ matrix.target }} release Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
       - run: cross build --release --all-features --target ${{ matrix.target }}
         env:
           RUST_BACKTRACE: 1
@@ -79,9 +79,41 @@ jobs:
           name: "${{ matrix.target }}"
           path: target/${{ matrix.target }}/release/crab-hole
   
+  github_publish:
+    strategy:
+      matrix:
+        os: [ubuntu, windows, macos]
+    continue-on-error: true
+    name: github_publish_${{ matrix.os }}
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        id: "rust-toolchain"
+      - run: |
+          echo target=$(rustc -vV | sed -n 's|host: ||p') >> "$GITHUB_OUTPUT"
+        id: default_target
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: "${{runner.os}} release Rust Lock ${{hashFiles('Cargo.lock')}}"
+      - run: cargo build --release --all-features
+        env:
+          RUST_BACKTRACE: 1
+      - run: tree target
+      - name: 'Upload Artifact'
+        uses: actions/upload-artifact@v3
+        with:
+          name: "${{  default_target.target }}"
+          path: target/release/crab-hole
+  
   docker:
     runs-on: ubuntu-latest
-    needs: [github_publish]
+    needs: [github_publish_cross]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3

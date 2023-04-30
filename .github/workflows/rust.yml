@@ -69,14 +69,16 @@ jobs:
             ~/.cargo/registry
             target
           key: "${{runner.os}} Target ${{ matrix.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cross build --release --all-features --target ${{ matrix.target }} --target-dir ${{ matrix.target }}
+      - run: cross build --release --all-features --target ${{ matrix.target }}
         env:
           RUST_BACKTRACE: 1
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v3
         with:
           name: "${{ matrix.target }}"
-          path: target/${{ matrix.target }}/release/crab-hole
+          path: |
+            target/${{ matrix.target }}/release/crab-hole
+            target/release/crab-hole
   
   github_publish_x86_64-apple-darwin:
     runs-on: matrix.os-latest

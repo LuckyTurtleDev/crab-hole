@@ -62,6 +62,13 @@ jobs:
         uses: baptiste0928/cargo-install@v2
         with:
           crate: cross
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: "${{runner.os}} Target ${{ matrix.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
       - run: cross build --release --all-features --target ${{ matrix.target }}
         env:
           RUST_BACKTRACE: 1

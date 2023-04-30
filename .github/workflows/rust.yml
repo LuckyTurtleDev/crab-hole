@@ -77,7 +77,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: "${{ matrix.target }}"
-          path: target/${{ matrix.target }}/release/crab-hole
+          path: target/${{ matrix.target }}/release/crab-hole*
   
   github_publish_x86_64-apple-darwin:
     runs-on: matrix.os-latest
@@ -100,7 +100,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: x86_64-apple-darwin
-          path: target/release/crab-hole*
+          path: target/release/crab-hole
   
   docker:
     runs-on: ubuntu-latest

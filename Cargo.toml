@@ -5,10 +5,18 @@ publish = false
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.70"
 async-trait = "0.1"
 chumsky = "0.9.2"
+directories = "5.0.0"
+log = "0.4.17"
+my-env-logger-style = { version = "0.1.0", git = "https://github.com/LuckyTurtleDev/my-env-logger-style.git" }
+nohash-hasher = "0.2.0"
+once_cell = { version = "1.17.1", features = ["parking_lot"] }
+reqwest = { version = "0.11.16", default-features = false, features = ["rustls-tls-webpki-roots"] }
 serde = { version = "1.0", features = ["derive"] }
-tokio = { version = "1.27", features = ["parking_lot", "rt-multi-thread", "macros", "net"] }
+tokio = { version = "1.27", features = ["fs", "parking_lot", "rt-multi-thread", "macros", "net"] }
 toml = { package = "basic-toml", version = "0.1" }
 trust-dns-proto = "0.22"
 trust-dns-server = { version = "0.22", features = ["dnssec-ring", "dns-over-rustls", "dns-over-quic", "dns-over-https"] }
+url = { version = "2.3.1", features = ["serde"] }

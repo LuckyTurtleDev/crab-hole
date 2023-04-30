@@ -2,6 +2,8 @@
 /target/
 #/Cargo.lock
 
+data
+
 # git
 *.orig
 

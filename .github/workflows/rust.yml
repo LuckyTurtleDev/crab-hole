@@ -23,7 +23,6 @@ jobs:
       - run: cargo test --workspace --all-features
         env:
           RUST_BACKTRACE: 1
-          TG_BOT_KEY: ${{ secrets.TG_BOT_KEY }}
 
   rustfmt:
     runs-on: ubuntu-latest
@@ -46,14 +45,77 @@ jobs:
           packages: crab-hole
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          
-  docker:
+  
+  github_publish_cross:
+    strategy:
+      matrix:
+        target: [i686-unknown-linux-musl, x86_64-unknown-linux-musl, arm-unknown-linux-musleabihf, armv7-unknown-linux-musleabihf, aarch64-unknown-linux-musl,   x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, x86_64-pc-windows-gnu]
+    continue-on-error: true
+    name: github_publish_${{ matrix.target }}
     runs-on: ubuntu-latest
     needs: [test]
     steps:
-    - name: Checkout repository and submodules
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        id: "rust-toolchain"
+      - name: install cross
+        uses: baptiste0928/cargo-install@v2
+        with:
+          crate: cross
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: "${{runner.os}} Target ${{ matrix.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
+      - run: cross build --release --all-features --target ${{ matrix.target }}
+        env:
+          RUST_BACKTRACE: 1
+      - run: tree
+      - name: 'Upload Artifact'
+        uses: actions/upload-artifact@v3
+        with:
+          name: "${{ matrix.target }}"
+          path: target/${{ matrix.target }}/release/crab-hole*
+  
+  github_publish_x86_64-apple-darwin:
+    runs-on: matrix.os-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        id: "rust-toolchain"
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
+      - run: cargo build --release --all-features
+        env:
+          RUST_BACKTRACE: 1
+      - name: 'Upload Artifact'
+        uses: actions/upload-artifact@v3
+        with:
+          name: x86_64-apple-darwin
+          path: target/release/crab-hole
+  
+  docker:
+    runs-on: ubuntu-latest
+    needs: [github_publish_cross]
+    steps:
+    - name: Checkout repository
       uses: actions/checkout@v3
+    - uses: actions/download-artifact@v3
+      with:
+        path: github_artifacts
     - name: docker
       uses: LuckyTurtleDev/easy-docker-action@main
       with:
         ghcr_password: ${{ secrets.GITHUB_TOKEN }}
+        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8
+        max_parallelism: 1
+
+

@@ -51,7 +51,7 @@ jobs:
       matrix:
         target: [i686-unknown-linux-musl, x86_64-unknown-linux-musl, arm-unknown-linux-musleabihf, armv7-unknown-linux-musleabihf, aarch64-unknown-linux-musl,   x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, x86_64-pc-windows-gnu]
     continue-on-error: true
-    name: github_publish_${{ matrix.target }}
+    name: ${{ matrix.target }}
     runs-on: ubuntu-latest
     needs: [test]
     steps:
@@ -77,10 +77,13 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: "${{ matrix.target }}"
-          path: target/${{ matrix.target }}/release/crab-hole*
+          path: |
+            target/${{ matrix.target }}/release/crab-hole
+            target/${{ matrix.target }}/release/crab-hole.exe
   
   github_publish_x86_64-apple-darwin:
     runs-on: macos-latest
+    name: x86_64-apple-darwin
     needs: [test]
     steps:
       - uses: actions/checkout@v3

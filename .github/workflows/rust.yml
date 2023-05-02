@@ -77,7 +77,9 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: "${{ matrix.target }}"
-          path: target/${{ matrix.target }}/release/crab-hole*
+          path: |
+            target/${{ matrix.target }}/release/crab-hole
+            target/${{ matrix.target }}/release/crab-hole.exe
   
   github_publish_x86_64-apple-darwin:
     runs-on: macos-latest

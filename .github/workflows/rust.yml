@@ -83,6 +83,7 @@ jobs:
   
   github_publish_x86_64-apple-darwin:
     runs-on: macos-latest
+    name: x86_64-apple-darwin
     needs: [test]
     steps:
       - uses: actions/checkout@v3

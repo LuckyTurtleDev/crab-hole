@@ -80,7 +80,7 @@ jobs:
           path: target/${{ matrix.target }}/release/crab-hole*
   
   github_publish_x86_64-apple-darwin:
-    runs-on: matrix.os-latest
+    runs-on: macos-latest
     needs: [test]
     steps:
       - uses: actions/checkout@v3

@@ -305,4 +305,19 @@ mod tests {
 		"};
 		test(input, vec!["example.com".into()]);
 	}
+
+	#[test]
+	fn strange_chars_in_comment1() {
+		test("#</maybe-spy>", vec![]);
+	}
+
+	#[test]
+	fn strange_chars_in_comment2() {
+		test("#@ <<<<<<<< hostsplus => hosts", vec![]);
+	}
+
+	#[test]
+	fn loopback_ipv6_domain() {
+		test("fe80::1%lo0 localhost", vec!["localhost".into()]);
+	}
 }

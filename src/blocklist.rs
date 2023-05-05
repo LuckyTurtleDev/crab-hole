@@ -1,4 +1,4 @@
-use crate::{trie::Trie, CLIENT, LIST_DIR};
+use crate::{parser, trie::Trie, CLIENT, LIST_DIR};
 use anyhow::Context;
 use log::{error, info};
 use std::path::PathBuf;
@@ -6,21 +6,22 @@ use tokio::{
 	fs::{create_dir_all, read_to_string, write},
 	sync::RwLock
 };
+use trust_dns_proto::rr::domain;
 use url::Url;
 
 #[derive(Default)]
-pub struct BlockList {
+pub(crate) struct BlockList {
 	trie: RwLock<Trie>
 }
 
 impl BlockList {
-	pub fn new() -> Self {
+	pub(crate) fn new() -> Self {
 		BlockList::default()
 	}
 
 	///Clear and update the current Blocklist, to all entries of the list at from `adlist`.
 	///if `use_cache` is set true, cached list, will not be redownloaded (faster init)
-	pub async fn update(&self, adlist: &Vec<Url>, restore_from_cache: bool) {
+	pub(crate) async fn update(&self, adlist: &Vec<Url>, restore_from_cache: bool) {
 		if restore_from_cache {
 			info!("restore blocklist, from cache");
 		} else {
@@ -94,10 +95,27 @@ impl BlockList {
 					}
 				},
 			};
-			if raw_list.is_none() {
-				error!("skipp list {url}");
+			match raw_list {
+				None => error!("skipp list {url}"),
+				Some(raw_list) => {
+					let result = parser::Blocklist::parse(url.as_str(), &raw_list);
+					match result {
+						Err(_err) => error!("parsing Blockist {}", url.as_str()),
+						Ok(list) => {
+							for entry in list.entries {
+								match entry {
+									parser::Line::Domain(domain) => {
+										trie.insert(&domain.0)
+									},
+									parser::Line::IpDomain(_, domain) => {
+										trie.insert(&domain.0)
+									},
+								}
+							}
+						},
+					}
+				}
 			}
-			//TODO PRASE
 		}
 		info!("shrink blocklist");
 		trie.shrink_to_fit();
@@ -107,7 +125,7 @@ impl BlockList {
 		info!("finish updating blocklist");
 	}
 
-	pub async fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
+	pub(crate) async fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
 		self.trie.read().await.contains(domain, include_subdomains)
 	}
 }

@@ -6,7 +6,6 @@ use tokio::{
 	fs::{create_dir_all, read_to_string, write},
 	sync::RwLock
 };
-use trust_dns_proto::rr::domain;
 use url::Url;
 
 #[derive(Default)]
@@ -103,14 +102,7 @@ impl BlockList {
 						Err(_err) => error!("parsing Blockist {}", url.as_str()),
 						Ok(list) => {
 							for entry in list.entries {
-								match entry {
-									parser::Line::Domain(domain) => {
-										trie.insert(&domain.0)
-									},
-									parser::Line::IpDomain(_, domain) => {
-										trie.insert(&domain.0)
-									},
-								}
+								trie.insert(&entry.domain().0);
 							}
 						},
 					}

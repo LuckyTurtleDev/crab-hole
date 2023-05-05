@@ -136,26 +136,45 @@ impl Blocklist {
 
 pub(crate) enum Line {
 	Domain(Domain),
-	IpDomain(IpAddr, Domain)
+	IpDomain(IpAddr, Domain),
+	IpIfaceDomain(IpAddr, String, Domain)
 }
 
 impl Line {
+	pub(crate) fn domain(&self) -> &Domain {
+		match self {
+			Self::Domain(domain) => domain,
+			Self::IpDomain(_, domain) => domain,
+			Self::IpIfaceDomain(_, _, domain) => domain
+		}
+	}
+
 	fn parser() -> impl Parser<char, Option<Self>, Error = ParserError> {
 		choice((
-			// [<ip>] <domain>
+			// [<ip>][%<iface>] <domain>
 			choice((
 				filter(|c: &char| c.is_ascii_hexdigit() || *c == '.' || *c == ':')
 					.repeated()
 					.at_least(2)
 					.map(|ip| Some(ip.into_iter().collect::<String>().parse().unwrap()))
+					.then(choice((
+						just("%")
+							.ignore_then(
+								filter(|c: &char| c.is_ascii_alphanumeric()).repeated()
+							)
+							.map(|iface| Some(iface.into_iter().collect::<String>())),
+						empty().map(|_| None)
+					)))
 					.then_ignore(one_of([' ', '\t']).repeated().at_least(1)),
-				empty().map(|_| None)
+				empty().map(|_| (None, None))
 			))
 			.then(Domain::parser())
 			.map(|(addr, domain)| {
 				Some(match addr {
-					None => Self::Domain(domain),
-					Some(addr) => Self::IpDomain(addr, domain)
+					(None, None) => Self::Domain(domain),
+					(Some(addr), None) => Self::IpDomain(addr, domain),
+					(Some(addr), Some(iface)) => Self::IpIfaceDomain(addr, iface, domain),
+					_ => unreachable!()
 				})
 			})
 			.debug("Line parser: IpDomain"),
@@ -194,13 +213,7 @@ mod tests {
 		let blocked: Vec<String> = blocklist
 			.entries
 			.into_iter()
-			.map(|f| {
-				match f {
-					Line::Domain(domain) => domain,
-					Line::IpDomain(_, domain) => domain
-				}
-				.0
-			})
+			.map(|f| f.domain().0.clone())
 			.collect();
 		assert_eq!(blocked, output);
 	}

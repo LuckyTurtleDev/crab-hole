@@ -134,6 +134,19 @@ impl Blocklist {
 	}
 }
 
+struct Comment;
+
+impl Comment {
+	fn parser() -> impl Parser<char, Self, Error = ParserError> {
+		filter(|c: &char| c.is_whitespace())
+			.repeated()
+			.ignore_then(just("#"))
+			.ignore_then(none_of(['\r', '\n']).repeated())
+			.map(|_| Self)
+			.debug("Comment parser")
+	}
+}
+
 pub(crate) enum Line {
 	Domain(Domain),
 	IpDomain(IpAddr, Domain),
@@ -177,10 +190,10 @@ impl Line {
 					_ => unreachable!()
 				})
 			})
+			.then_ignore(choice((Comment::parser().ignored(), empty())))
 			.debug("Line parser: IpDomain"),
 			// full line comment
-			just("#")
-				.then(none_of(['\r', '\n']).repeated())
+			Comment::parser()
 				.map(|_| None)
 				.debug("Line parser: Comment"),
 			// empty line

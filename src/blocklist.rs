@@ -99,7 +99,10 @@ impl BlockList {
 				Some(raw_list) => {
 					let result = parser::Blocklist::parse(url.as_str(), &raw_list);
 					match result {
-						Err(_err) => error!("parsing Blockist {}", url.as_str()),
+						Err(err) => {
+							error!("parsing Blockist {}", url.as_str());
+							err.print();
+						},
 						Ok(list) => {
 							for entry in list.entries {
 								trie.insert(&entry.domain().0);

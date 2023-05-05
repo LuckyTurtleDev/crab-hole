@@ -1,3 +1,8 @@
+#![warn(rust_2018_idioms, unreachable_pub)]
+#![forbid(elided_lifetimes_in_paths, unsafe_code)]
+
+mod parser;
+
 use anyhow::Context;
 use async_trait::async_trait;
 use directories::ProjectDirs;
@@ -52,7 +57,7 @@ static CONFIG_PATH: Lazy<PathBuf> = Lazy::new(|| {
 	.join("config.toml")
 });
 
-static CLIENT: Lazy<Client> = Lazy::new(|| Client::new());
+static CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
 mod trie;
 

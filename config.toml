@@ -1,5 +1,5 @@
 [blocklist]
-inculde_subdomains = true
+include_subdomains = true
 lists = [
 	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts"
 ]

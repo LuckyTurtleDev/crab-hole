@@ -9,11 +9,10 @@ pub(crate) struct Domain(pub(crate) String);
 
 impl Domain {
 	fn parser() -> impl Parser<char, Self, Error = ParserError> {
-		let ident = filter(|c: &char| {
-			*c != '#' && *c != ':' && (*c == '-' || c.is_alphanumeric())
-		})
-		.repeated()
-		.at_least(1);
+		let ident =
+			filter(|c: &char| *c != '#' && *c != ':' && *c != '.' && !c.is_whitespace())
+				.repeated()
+				.at_least(1);
 		ident
 			.then(just(".").then(ident).repeated())
 			.then_ignore(just(".").ignored().or(empty()))

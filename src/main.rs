@@ -1,3 +1,4 @@
+use anyhow::Context;
 use async_trait::async_trait;
 use directories::ProjectDirs;
 use log::{debug, info};
@@ -60,16 +61,17 @@ use blocklist::BlockList;
 
 struct Handler {
 	catalog: Catalog,
-	blocklist: Arc<BlockList>
+	blocklist: Arc<BlockList>,
+	include_subdomains: bool
 }
 
 impl Handler {
-	async fn new(config: &ForwardConfig, adlist: &Vec<Url>) -> Self {
+	async fn new(config: &Config) -> Self {
 		let zone_name = Name::root();
 		let authority = ForwardAuthority::try_from_config(
 			zone_name.clone(),
 			ZoneType::Forward,
-			config
+			&config.upstream
 		)
 		.expect("Failed to create forwarder");
 
@@ -77,11 +79,12 @@ impl Handler {
 		catalog.upsert(zone_name.into(), Box::new(Arc::new(authority)));
 
 		let blocklist = BlockList::new();
-		blocklist.update(adlist, true).await;
+		blocklist.update(&config.blocklist.lists, true).await;
 
 		Self {
 			catalog,
-			blocklist: Arc::new(blocklist)
+			blocklist: Arc::new(blocklist),
+			include_subdomains: config.blocklist.include_subdomains
 		}
 	}
 }
@@ -96,7 +99,7 @@ impl RequestHandler for Handler {
 		let lower_query = request.request_info().query;
 		if self
 			.blocklist
-			.contains(&lower_query.to_string(), true)
+			.contains(&lower_query.to_string(), self.include_subdomains)
 			.await
 		{
 			debug!("blocked: {lower_query:?}");
@@ -124,11 +127,23 @@ impl RequestHandler for Handler {
 
 #[tokio::main]
 async fn async_main(config: Config) {
-	let udp_socket = UdpSocket::bind("[::]:8080")
-		.await
-		.expect("failed to bind udp socket");
-	let handler = Handler::new(&config.upstream, &config.blocklist.lists).await;
+	let handler = Handler::new(&config).await;
 	let blocklist = handler.blocklist.clone();
+	let mut server = Server::new(handler);
+	for downstream in config.downstream {
+		info!("add downstream {:?}", downstream);
+		match downstream {
+			DownstreamConfig::Udp(downstream) => {
+				let udp_socket = UdpSocket::bind(format!("[::]:{}", downstream.port))
+					.await
+					.with_context(|| {
+						format!("failed to bind udp socket [::]:{}", downstream.port)
+					})
+					.unwrap_or_else(|err| panic!("{err:?}"));
+				server.register_socket(udp_socket);
+			}
+		}
+	}
 	tokio::spawn(async {
 		let blocklist = blocklist;
 		let lists = config.blocklist.lists;
@@ -137,8 +152,6 @@ async fn async_main(config: Config) {
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
 	});
-	let mut server = Server::new(handler);
-	server.register_socket(udp_socket);
 	info!("🚀 start dns server");
 	server
 		.block_until_done()
@@ -146,16 +159,28 @@ async fn async_main(config: Config) {
 		.expect("failed to run dns server");
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Config {
 	upstream: ForwardConfig,
+	downstream: Vec<DownstreamConfig>,
 	blocklist: BlockConfig
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct BlockConfig {
 	lists: Vec<Url>,
-	inculde_subdomains: bool
+	include_subdomains: bool
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase", tag = "protocol")]
+enum DownstreamConfig {
+	Udp(UdpConfig)
+}
+
+#[derive(Debug, Deserialize)]
+struct UdpConfig {
+	port: u16
 }
 
 fn main() {
@@ -164,7 +189,11 @@ fn main() {
 	my_env_logger_style::just_log();
 	info!("           🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
 	let config = fs::read(&*CONFIG_PATH)
-		.unwrap_or_else(|_| panic!("Failed to read {:?} config", CONFIG_PATH.as_path()));
-	let config: Config = toml::from_slice(&config).expect("Failed to deserialize config");
+		.with_context(|| format!("Failed to read {:?}", CONFIG_PATH.as_path()))
+		.unwrap_or_else(|err| panic!("{err:?}"));
+	let config: Config = toml::from_slice(&config)
+		.with_context(|| "Failed to deserialize config")
+		.unwrap_or_else(|err| panic!("{err:?}"));
+	debug!("loaded {:#?}", config);
 	async_main(config);
 }

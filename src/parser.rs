@@ -1,5 +1,5 @@
-use chumsky::prelude::*;
-use indoc::indoc;
+use ariadne::{Label, Report, ReportKind, Source};
+use chumsky::{error::SimpleReason, prelude::*};
 use std::net::IpAddr;
 
 type ParserError = Simple<char>;
@@ -25,6 +25,7 @@ impl Domain {
 				}
 				Self(domain)
 			})
+			.debug("Domain parser")
 	}
 }
 
@@ -32,14 +33,84 @@ pub(crate) struct Blocklist {
 	pub(crate) entries: Vec<Line>
 }
 
-#[derive(Debug)]
-pub(crate) struct ParseError;
+pub(crate) struct ParseError<'a> {
+	input: &'a str,
+	path_str: &'a str,
+	err: Vec<ParserError>
+}
 
-pub(crate) type ParseResult<T> = Result<T, ParseError>;
+fn report_err(buf: &str, path_str: &str, err: Vec<ParserError>) {
+	for e in err {
+		let mut report = Report::build(ReportKind::Error, path_str, e.span().start);
+		match (e.reason(), e.found()) {
+			(SimpleReason::Unexpected, Some(found)) => {
+				report.set_message("Unexpected token");
+				report.add_label(
+					Label::new((path_str, e.span()))
+						.with_message(format!("Unexpected token {found}"))
+				);
+				if e.expected().len() > 0 {
+					report.set_note(format!(
+						"Expected {}",
+						e.expected()
+							.map(|ex| match ex {
+								Some(ex) => ex.to_string(),
+								None => "end of file".to_owned()
+							})
+							.collect::<Vec<_>>()
+							.join(", ")
+					));
+				}
+			},
+
+			(SimpleReason::Unexpected, None) => {
+				report.set_message("Unexpected end of file");
+			},
+
+			(SimpleReason::Unclosed { span, delimiter }, found) => {
+				report.set_message("Unclosed delimiter");
+				report.add_label(
+					Label::new((path_str, span.clone()))
+						.with_message(format!("Unclosed delimiter {delimiter}"))
+				);
+				if let Some(found) = found {
+					report.add_label(
+						Label::new((path_str, e.span()))
+							.with_message(format!("Must be closed before this {found}"))
+					);
+				}
+			},
+
+			(SimpleReason::Custom(msg), _) => {
+				report.set_message(msg);
+				report.add_label(Label::new((path_str, e.span())).with_message(msg));
+			}
+		};
+		report
+			.finish()
+			.print((path_str, Source::from(buf)))
+			.unwrap();
+	}
+}
+
+impl ParseError<'_> {
+	pub(crate) fn print(self) {
+		report_err(self.input, self.path_str, self.err);
+	}
+}
+
+pub(crate) type ParseResult<'a, T> = Result<T, ParseError<'a>>;
 
 impl Blocklist {
-	pub(crate) fn parse(input: &str) -> ParseResult<Self> {
-		Self::parser().parse(input).map_err(|_| ParseError)
+	pub(crate) fn parse<'a>(path: &'a str, input: &'a str) -> ParseResult<'a, Self> {
+		match Self::parser().parse_recovery_verbose(input) {
+			(Some(value), errs) if errs.is_empty() => Ok(value),
+			(_, errs) => Err(ParseError {
+				input,
+				path_str: path,
+				err: errs
+			})
+		}
 	}
 
 	fn parser() -> impl Parser<char, Self, Error = ParserError> {
@@ -55,6 +126,7 @@ impl Blocklist {
 					entries: entries.into_iter().flatten().collect()
 				}
 			})
+			.debug("Blocklist parser")
 	}
 }
 
@@ -66,20 +138,14 @@ pub(crate) enum Line {
 impl Line {
 	fn parser() -> impl Parser<char, Option<Self>, Error = ParserError> {
 		choice((
-			// empty line
-			one_of([' ', '\t']).repeated().map(|_| None),
-			// full line comment
-			just("#")
-				.then(none_of(['\r', '\n']).repeated())
-				.map(|_| None),
 			// [<ip>] <domain>
 			choice((
-				empty().map(|_| None),
 				filter(|c: &char| c.is_ascii_hexdigit() || *c == '.' || *c == ':')
 					.repeated()
 					.at_least(2)
 					.map(|ip| Some(ip.into_iter().collect::<String>().parse().unwrap()))
-					.then_ignore(one_of([' ', '\t']).repeated().at_least(1))
+					.then_ignore(one_of([' ', '\t']).repeated().at_least(1)),
+				empty().map(|_| None)
 			))
 			.then(Domain::parser())
 			.map(|(addr, domain)| {
@@ -88,16 +154,39 @@ impl Line {
 					Some(addr) => Self::IpDomain(addr, domain)
 				})
 			})
+			.debug("Line parser: IpDomain"),
+			// full line comment
+			just("#")
+				.then(none_of(['\r', '\n']).repeated())
+				.map(|_| None)
+				.debug("Line parser: Comment"),
+			// empty line
+			one_of([' ', '\t'])
+				.repeated()
+				.map(|_| None)
+				.debug("Line parser: Empty")
 		))
+		.debug("Line parser")
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use indoc::indoc;
+
+	fn parse(input: &str) -> Blocklist {
+		match Blocklist::parse("<test-input>", input) {
+			Ok(blocklist) => blocklist,
+			Err(err) => {
+				err.print();
+				panic!("Failed to parse input");
+			}
+		}
+	}
 
 	fn test(input: &str, output: Vec<String>) {
-		let blocklist = Blocklist::parse(input).expect("parisng error");
+		let blocklist = parse(input);
 		let blocked: Vec<String> = blocklist
 			.entries
 			.into_iter()
@@ -149,7 +238,7 @@ mod tests {
 		test("0.0.0.0 example.com\n", vec!["example.com".into()]);
 	}
 	#[test]
-		fn multiline_ipv4_domain() {
+	fn multiline_ipv4_domain() {
 		let input = indoc! {"
 		0.0.0.0 foo.baaa.dev
 		93.184.216.34 example.com
@@ -211,9 +300,9 @@ mod tests {
 	#[test]
 	fn empty_lines() {
 		let input = indoc! {"
-		
+
 		example.com
-		
+
 		"};
 		test(input, vec!["example.com".into()]);
 	}

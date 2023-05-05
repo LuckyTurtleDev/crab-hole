@@ -18,8 +18,8 @@ reqwest = { version = "0.11.16", default-features = false, features = ["rustls-t
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.27", features = ["fs", "parking_lot", "rt-multi-thread", "macros", "net"] }
 toml = { package = "basic-toml", version = "0.1" }
-trust-dns-proto = "0.22"
-trust-dns-server = { version = "0.22", features = ["dnssec-ring", "dns-over-rustls", "dns-over-quic", "dns-over-https"] }
+trust-dns-proto = { version = "0.22", default-features = false }
+trust-dns-server = { version = "0.22", default-features = false,  features = ["dnssec-ring", "dns-over-rustls", "dns-over-https-rustls", "dns-over-quic"] }
 url = { version = "2.3.1", features = ["serde"] }
 
 [dev-dependencies]

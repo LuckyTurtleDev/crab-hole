@@ -4,6 +4,13 @@ lists = [
 	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts"
 ]
 
+[[downstream]]
+protocol = "udp"
+port = 8080
+
+[[downstream]]
+protocol = "udp"
+port = 8053
 
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1111]:853"

@@ -102,7 +102,12 @@ pub(crate) type ParseResult<'a, T> = Result<T, ParseError<'a>>;
 
 impl Blocklist {
 	pub(crate) fn parse<'a>(path: &'a str, input: &'a str) -> ParseResult<'a, Self> {
-		match Self::parser().parse_recovery_verbose(input) {
+		let parser = Self::parser();
+		#[cfg(test)]
+		let result = parser.parse_recovery_verbose(input);
+		#[cfg(not(test))]
+		let result = parser.parse_recovery(input);
+		match result {
 			(Some(value), errs) if errs.is_empty() => Ok(value),
 			(_, errs) => Err(ParseError {
 				input,

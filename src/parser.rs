@@ -36,8 +36,8 @@ pub(crate) struct ParseError;
 pub(crate) type ParseResult<T> = Result<T, ParseError>;
 
 impl Blocklist {
-	pub(crate) fn parse(buf: String) -> ParseResult<Self> {
-		unimplemented!()
+	pub(crate) fn parse(input: &str) -> ParseResult<Self> {
+		Self::parser().parse(input).map_err(|_| ParseError)
 	}
 
 	fn parser() -> impl Parser<char, Self, Error = ParserError> {

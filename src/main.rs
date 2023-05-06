@@ -50,7 +50,19 @@ static CONFIG_PATH: Lazy<PathBuf> = Lazy::new(|| {
 		PathBuf::from(var)
 	} else {
 		#[cfg(not(debug_assertions))]
-		return PROJECT_DIRS.config_dir().to_owned(); //rust wants a ; here
+		{
+			let path = PROJECT_DIRS.config_dir().join("config.toml");
+			#[cfg(target_family = "unix")]
+			if !path.exists() {
+				let alternative_path: String = format!("/etc/{CARGO_PKG_NAME}.toml");
+				info!(
+					"{:?} does not exist use {alternative_path:?} instead",
+					path.to_string_lossy()
+				);
+				return alternative_path.into();
+			}
+			return path;
+		}
 		#[cfg(debug_assertions)]
 		PathBuf::new()
 	}
@@ -192,16 +204,18 @@ struct UdpConfig {
 }
 
 fn main() {
+	my_env_logger_style::just_log();
+	info!("🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
 	Lazy::force(&CONFIG_PATH);
 	Lazy::force(&LIST_DIR);
-	my_env_logger_style::just_log();
-	info!("           🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
+
+	info!("load config from {:?}", &*CONFIG_PATH);
 	let config = fs::read(&*CONFIG_PATH)
 		.with_context(|| format!("Failed to read {:?}", CONFIG_PATH.as_path()))
 		.unwrap_or_else(|err| panic!("{err:?}"));
 	let config: Config = toml::from_slice(&config)
 		.with_context(|| "Failed to deserialize config")
 		.unwrap_or_else(|err| panic!("{err:?}"));
-	debug!("loaded {:#?}", config);
+	debug!("{:#?}", config);
 	async_main(config);
 }

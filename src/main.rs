@@ -139,11 +139,10 @@ async fn async_main(config: Config) {
 		info!("add downstream {:?}", downstream);
 		match downstream {
 			DownstreamConfig::Udp(downstream) => {
-				let udp_socket = UdpSocket::bind(format!("[::]:{}", downstream.port))
+				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
+				let udp_socket = UdpSocket::bind(&socket_addr)
 					.await
-					.with_context(|| {
-						format!("failed to bind udp socket [::]:{}", downstream.port)
-					})
+					.with_context(|| format!("failed to bind udp socket {}", socket_addr))
 					.unwrap_or_else(|err| panic!("{err:?}"));
 				server.register_socket(udp_socket);
 			}
@@ -165,6 +164,7 @@ async fn async_main(config: Config) {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Config {
 	upstream: ForwardConfig,
 	downstream: Vec<DownstreamConfig>,
@@ -172,20 +172,23 @@ struct Config {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct BlockConfig {
 	lists: Vec<Url>,
 	include_subdomains: bool
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase", tag = "protocol")]
+#[serde(deny_unknown_fields, rename_all = "lowercase", tag = "protocol")]
 enum DownstreamConfig {
 	Udp(UdpConfig)
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct UdpConfig {
-	port: u16
+	port: u16,
+	listen: String
 }
 
 fn main() {

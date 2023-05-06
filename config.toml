@@ -6,10 +6,12 @@ lists = [
 
 [[downstream]]
 protocol = "udp"
+listen = "localhost"
 port = 8080
 
 [[downstream]]
 protocol = "udp"
+listen = "[::]" #all ipv6 and ipv4 adress
 port = 8053
 
 [[upstream.name_servers]]

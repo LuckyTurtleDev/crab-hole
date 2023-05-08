@@ -1,7 +1,6 @@
 [package]
 name = "crab-hole"
 version = "0.1.0"
-publish = false
 edition = "2021"
 description = "A pihole clone written using Trust-DNS"
 repository = "https://github.com/LuckyTurtleDev/my-env-logger-style"

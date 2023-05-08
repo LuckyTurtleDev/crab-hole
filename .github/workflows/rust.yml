@@ -46,7 +46,7 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
   
-  github_publish_cross:
+  cross_build:
     strategy:
       matrix:
         target: [i686-unknown-linux-musl, x86_64-unknown-linux-musl, arm-unknown-linux-musleabihf, armv7-unknown-linux-musleabihf, aarch64-unknown-linux-musl,   x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, x86_64-pc-windows-gnu]
@@ -80,18 +80,8 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/crab-hole
             target/${{ matrix.target }}/release/crab-hole.exe
-      - name: Upload Release Asset Win
-        if: ${{ github.event_name == 'release' && contains( matrix.target, 'windows' ) }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.event.release.tag_name }}  target/${{ matrix.target }}/release/crab-hole.exe#${{ matrix.target }}
-      - name: Upload Release Asset
-        if: ${{ github.event_name == 'release' && !contains(matrix.target, 'windows') }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.event.release.tag_name }}  target/${{ matrix.target }}/release/crab-hole#${{ matrix.target }}
   
-  github_publish_x86_64-apple-darwin:
+  build_x86_64-apple-darwin:
     runs-on: macos-latest
     name: x86_64-apple-darwin
     needs: [test]
@@ -114,15 +104,10 @@ jobs:
         with:
           name: x86_64-apple-darwin
           path: target/release/crab-hole
-      - name: Upload Release Asset
-        if: ${{ github.event_name == 'release' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.event.release.tag_name }}  target/${{ matrix.target }}/release/crab-hole#${{ matrix.target }}
   
   docker:
     runs-on: ubuntu-latest
-    needs: [github_publish_cross]
+    needs: [cross_build]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
@@ -135,5 +120,25 @@ jobs:
         ghcr_password: ${{ secrets.GITHUB_TOKEN }}
         platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8
         max_parallelism: 1
-
-
+  
+  github_publish:
+    runs-on: ubuntu-latest
+    needs: [cross_build]
+    if: ${{ github.event_name == 'release' }}
+    steps:
+    - uses: actions/download-artifact@v3
+      with:
+        path: github_artifacts
+    - name: Upload Release Artifacts
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NAME: ${{ github.event.release.tag_name }}
+      run: |
+        for dir in github_artifacts/*; do
+          dir=${dir#github_artifacts/}
+          cd github_artifacts
+          zip -r ${dir}.zip ${dir}
+          gh release upload ${RELEASE_NAME} ${dir}.zip
+          rm ${dir}.zip
+          cd ..
+        done

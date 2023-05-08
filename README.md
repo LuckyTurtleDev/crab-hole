@@ -1,10 +1,21 @@
 # 🦀 crab-hole 
-![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue) [![crab-hole on crates.io](https://img.shields.io/crates/v/crab-hole)](https://crates.io/crates/crab-hole) [![Source Code Repository](https://img.shields.io/badge/Code-On%20GitHub-blue?logo=GitHub)](https://github.com/LuckyTurtleDev/my-env-logger-style)
+![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
+[![crab-hole on crates.io](https://img.shields.io/crates/v/crab-hole)](https://crates.io/crates/crab-hole)
+[![Source Code Repository](https://img.shields.io/badge/Code-On%20GitHub-blue?logo=GitHub)](https://github.com/LuckyTurtleDev/my-env-logger-style)
+[![Packaging status](https://repology.org/badge/tiny-repos/crab-hole.svg)](https://repology.org/project/crab-hole/versions) 
+[![AUR package](https://repology.org/badge/version-for-repo/aur/crab-hole.svg)](https://aur.archlinux.org/packages/crab-hole)
 
 Pi-Hole clone written in rust using trust-dns.
 With buildin support for doh, doq and dot. 
 
-### Configuration:
+# Installation: 
+Crab-hole is avaibale at the following repositories:
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/crab-hole.svg)](https://repology.org/project/crab-hole/versions)
+
+Prebuild binarys can also been downloaded from the [Github release](https://github.com/LuckyTurtleDev/crab-hole/releases/latest).
+
+# Configuration:
 Example config file using cloudflare as dot (dns-over-tls) upstream.
 ```toml
 [blocklist]

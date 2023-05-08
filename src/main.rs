@@ -204,6 +204,7 @@ struct UdpConfig {
 }
 
 fn main() {
+	my_env_logger_style::get_set_max_module_len(20);
 	my_env_logger_style::just_log();
 	info!("🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
 	Lazy::force(&CONFIG_PATH);

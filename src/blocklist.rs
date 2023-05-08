@@ -22,9 +22,9 @@ impl BlockList {
 	///if `use_cache` is set true, cached list, will not be redownloaded (faster init)
 	pub(crate) async fn update(&self, adlist: &Vec<Url>, restore_from_cache: bool) {
 		if restore_from_cache {
-			info!("restore blocklist, from cache");
+			info!("👮💾 restore blocklist, from cache");
 		} else {
-			info!("updating blocklist");
+			info!("👮📥 updating blocklist");
 		}
 		if let Err(err) = create_dir_all(&*LIST_DIR)
 			.await
@@ -117,7 +117,7 @@ impl BlockList {
 		let mut guard = self.trie.write().await;
 		*guard = trie;
 		drop(guard);
-		info!("finish updating blocklist");
+		info!("👮✅ finish updating blocklist");
 	}
 
 	pub(crate) async fn contains(&self, domain: &str, include_subdomains: bool) -> bool {

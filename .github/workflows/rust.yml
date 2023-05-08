@@ -84,12 +84,12 @@ jobs:
         if: ${{ github.event_name == 'release' && contains( matrix.target, 'windows' ) }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.ref }}  target/${{ matrix.target }}/release/crab-hole.exe#${{ matrix.target }}
+        run: gh release upload ${{ github.event.release.tag_name }}  target/${{ matrix.target }}/release/crab-hole.exe#${{ matrix.target }}
       - name: Upload Release Asset
         if: ${{ github.event_name == 'release' && !contains(matrix.target, 'windows') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.ref }}  target/${{ matrix.target }}/release/crab-hole#${{ matrix.target }}
+        run: gh release upload ${{ github.event.release.tag_name }}  target/${{ matrix.target }}/release/crab-hole#${{ matrix.target }}
   
   github_publish_x86_64-apple-darwin:
     runs-on: macos-latest
@@ -118,7 +118,7 @@ jobs:
         if: ${{ github.event_name == 'release' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.ref }}  target/${{ matrix.target }}/release/crab-hole#${{ matrix.target }}
+        run: gh release upload ${{ github.event.release.tag_name }}  target/${{ matrix.target }}/release/crab-hole#${{ matrix.target }}
   
   docker:
     runs-on: ubuntu-latest

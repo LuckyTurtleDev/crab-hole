@@ -133,7 +133,11 @@ impl RequestHandler for Handler {
 					)
 				)
 				.await
-				.unwrap(); //when does this fail?
+				.unwrap_or_else(|_| {
+					let mut header = Header::new();
+					header.set_response_code(ResponseCode::ServFail);
+					header.into()
+				});
 		} else {
 			debug!("{lower_query:?}");
 		}

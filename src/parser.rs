@@ -61,7 +61,7 @@ fn report_err(buf: &str, path_str: &str, err: Vec<ParserError>) {
 						"Expected {}",
 						e.expected()
 							.map(|ex| match ex {
-								Some(ex) => ex.to_string(),
+								Some(ex) => format!("{ex:?}"),
 								None => "end of file".to_owned()
 							})
 							.collect::<Vec<_>>()

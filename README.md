@@ -5,8 +5,11 @@
 [![Packaging status](https://repology.org/badge/tiny-repos/crab-hole.svg)](https://repology.org/project/crab-hole/versions) 
 [![AUR package](https://repology.org/badge/version-for-repo/aur/crab-hole.svg)](https://aur.archlinux.org/packages/crab-hole)
 
-Pi-Hole clone written in rust using trust-dns.
-With buildin support for doh, doq and dot. 
+Crab-hole is a cross platform Pi-hole clone written in rust using [trust-dns](https://github.com/bluejekyll/trust-dns).
+It can be use as network wide Ad and spy blocker or just run it on your local pc.
+
+For a secure and private communication carb-hole has buildin support for doh(https), doq(quic), dot(tls) and dnssec for upstreams.
+And does also come with private friendly default logging settings.
 
 # Installation: 
 Crab-hole is avaibale at the following repositories:
@@ -14,6 +17,14 @@ Crab-hole is avaibale at the following repositories:
 [![Packaging status](https://repology.org/badge/vertical-allrepos/crab-hole.svg)](https://repology.org/project/crab-hole/versions)
 
 Prebuild binarys can also been downloaded from the [Github release](https://github.com/LuckyTurtleDev/crab-hole/releases/latest).
+
+
+### Building from source: 
+Alternative you can easily build crab-hole by yourself.
+* [install rust](https://www.rust-lang.org/tools/install)
+* run `cargo install crab-hole --locked`.
+See the [rust book](https://doc.rust-lang.org/cargo/commands/cargo-install.html) for more information about cargo install.
+* make sure that `~/.cargo/bin` is listed at the `PATH` enviroment variable
 
 # Configuration:
 Example config file using cloudflare as dot (dns-over-tls) upstream.

@@ -1,8 +1,8 @@
 [package]
 name = "crab-hole"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
-description = "A pihole clone written using Trust-DNS"
+description = "Pi-Hole clone written in rust using trust-dns "
 repository = "https://github.com/LuckyTurtleDev/my-env-logger-style"
 keywords = ["DNS", "BIND", "named", "dnssec"]
 license = "AGPL-3.0-or-later"

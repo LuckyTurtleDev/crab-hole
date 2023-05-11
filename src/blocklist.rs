@@ -1,6 +1,7 @@
 use crate::{parser, trie::Trie, CLIENT, LIST_DIR};
 use anyhow::Context;
-use log::{error, info};
+use log::{error, info, warn};
+use num_format::{Locale, ToFormattedString};
 use std::path::PathBuf;
 use tokio::{
 	fs::{create_dir_all, read_to_string, write},
@@ -114,6 +115,14 @@ impl BlockList {
 		}
 		info!("shrink blocklist");
 		trie.shrink_to_fit();
+		let blocked_count = trie.len();
+		info!(
+			"{} domains are blocked",
+			blocked_count.to_formatted_string(&Locale::en)
+		);
+		if blocked_count == 0 {
+			warn!("Blocklist is empty");
+		}
 		let mut guard = self.trie.write().await;
 		*guard = trie;
 		drop(guard);

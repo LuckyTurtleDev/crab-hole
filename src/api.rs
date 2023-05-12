@@ -1,4 +1,4 @@
-use crate::{BLOCKLIST_LEN, QUERIES_ALL, QUERIES_BLOCKED};
+use crate::{BLOCKLIST_LEN, QUERIES_ALL, QUERIES_BLOCKED, RUNNING_SINCE};
 use gotham_restful::{
 	gotham::{pipeline::PipelineHandleChain, router::builder::ScopeBuilder},
 	read_all, DrawResourcesWithSchema as _, GetOpenapi as _, OpenapiInfo, Resource,
@@ -7,6 +7,7 @@ use gotham_restful::{
 use openapi_type::OpenapiType;
 use serde::{Deserialize, Serialize};
 use std::{panic::RefUnwindSafe, sync::atomic::Ordering};
+use time::OffsetDateTime;
 
 pub(crate) fn route<C, P>(url: &str, router: &mut ScopeBuilder<'_, C, P>)
 where
@@ -32,6 +33,8 @@ struct StatsResource;
 
 #[derive(Deserialize, OpenapiType, Serialize)]
 struct Stats {
+	/// The timestamp when the server was started.
+	running_since: OffsetDateTime,
 	/// The count of all entries on the blocklist.
 	blocklist_len: usize,
 	/// The count of all queries.
@@ -43,6 +46,7 @@ struct Stats {
 #[read_all]
 fn stats() -> Success<Stats> {
 	Stats {
+		running_since: RUNNING_SINCE.clone(),
 		blocklist_len: BLOCKLIST_LEN.load(Ordering::Relaxed),
 		queries_all: QUERIES_ALL.load(Ordering::Relaxed),
 		queries_blocked: QUERIES_BLOCKED.load(Ordering::Relaxed)

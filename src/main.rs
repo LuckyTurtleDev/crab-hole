@@ -25,6 +25,7 @@ use std::{
 	},
 	time::Duration
 };
+use time::OffsetDateTime;
 use tokio::{net::UdpSocket, time::sleep};
 use trust_dns_proto::{
 	op::{header::Header, response_code::ResponseCode},
@@ -85,6 +86,8 @@ static CONFIG_PATH: Lazy<PathBuf> = Lazy::new(|| {
 
 static CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
+/// The timestamp when the server was started.
+static RUNNING_SINCE: Lazy<OffsetDateTime> = Lazy::new(OffsetDateTime::now_utc);
 /// The count of all entries on the blocklist.
 static BLOCKLIST_LEN: AtomicUsize = AtomicUsize::new(0);
 /// The count of all queries.
@@ -216,6 +219,7 @@ async fn async_main(config: Config) {
 	});
 
 	info!("🚀 start dns server");
+	Lazy::force(&RUNNING_SINCE);
 	server
 		.block_until_done()
 		.await

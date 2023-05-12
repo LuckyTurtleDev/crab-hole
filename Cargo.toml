@@ -25,9 +25,10 @@ my-env-logger-style = "0.1.0"
 nohash-hasher = "0.2.0"
 num-format = "0.4.4"
 once_cell = { version = "1.17.1", features = ["parking_lot"] }
-openapi_type = "0.4"
+openapi_type = { version = "0.4", features = ["time"] }
 reqwest = { version = "0.11.16", default-features = false, features = ["rustls-tls-webpki-roots"] }
 serde = { version = "1.0", features = ["derive"] }
+time = { version = "0.3", features = ["serde"] }
 tokio = { version = "1.27", features = ["fs", "parking_lot", "rt-multi-thread", "macros", "net"] }
 toml = { package = "basic-toml", version = "0.1" }
 trust-dns-proto = { version = "0.22", default-features = false }

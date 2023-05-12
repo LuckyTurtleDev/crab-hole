@@ -210,6 +210,7 @@ dependencies = [
  "openapi_type",
  "reqwest",
  "serde",
+ "time 0.3.21",
  "tokio",
  "trust-dns-proto",
  "trust-dns-server",
@@ -957,6 +958,7 @@ dependencies = [
  "openapi_type_derive",
  "openapiv3",
  "serde_json",
+ "time 0.3.21",
 ]
 
 [[package]]

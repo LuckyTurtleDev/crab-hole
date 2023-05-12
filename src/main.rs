@@ -1,16 +1,30 @@
 #![warn(rust_2018_idioms, unreachable_pub)]
 #![forbid(elided_lifetimes_in_paths, unsafe_code)]
 
+mod api;
+mod blocklist;
 mod parser;
+mod trie;
 
 use anyhow::Context;
 use async_trait::async_trait;
+use blocklist::BlockList;
 use directories::ProjectDirs;
+use gotham_restful::gotham::{self, prelude::*, router::build_simple_router};
 use log::{debug, info};
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Deserialize;
-use std::{env::var, fs, iter, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+	env::var,
+	fs, iter,
+	path::PathBuf,
+	sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc
+	},
+	time::Duration
+};
 use tokio::{net::UdpSocket, time::sleep};
 use trust_dns_proto::{
 	op::{header::Header, response_code::ResponseCode},
@@ -71,15 +85,26 @@ static CONFIG_PATH: Lazy<PathBuf> = Lazy::new(|| {
 
 static CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
-mod trie;
-
-mod blocklist;
-use blocklist::BlockList;
+/// The count of all entries on the blocklist.
+static BLOCKLIST_LEN: AtomicUsize = AtomicUsize::new(0);
+/// The count of all queries.
+static QUERIES_ALL: AtomicUsize = AtomicUsize::new(0);
+/// The count of all blocked queries.
+static QUERIES_BLOCKED: AtomicUsize = AtomicUsize::new(0);
 
 struct Handler {
 	catalog: Catalog,
 	blocklist: Arc<BlockList>,
 	include_subdomains: bool
+}
+
+pub(crate) async fn update_blocklist(
+	blocklist: &BlockList,
+	adlist: &Vec<Url>,
+	restore_from_cache: bool
+) {
+	blocklist.update(adlist, restore_from_cache).await;
+	BLOCKLIST_LEN.store(blocklist.len().await, Ordering::Relaxed);
 }
 
 impl Handler {
@@ -96,7 +121,7 @@ impl Handler {
 		catalog.upsert(zone_name.into(), Box::new(Arc::new(authority)));
 
 		let blocklist = BlockList::new();
-		blocklist.update(&config.blocklist.lists, true).await;
+		update_blocklist(&blocklist, &config.blocklist.lists, true).await;
 
 		Self {
 			catalog,
@@ -113,6 +138,7 @@ impl RequestHandler for Handler {
 		request: &Request,
 		mut response_handler: R
 	) -> ResponseInfo {
+		QUERIES_ALL.fetch_add(1, Ordering::Relaxed);
 		let lower_query = request.request_info().query;
 		if self
 			.blocklist
@@ -122,6 +148,7 @@ impl RequestHandler for Handler {
 			)
 			.await
 		{
+			QUERIES_BLOCKED.fetch_add(1, Ordering::Relaxed);
 			debug!("blocked: {lower_query:?}");
 			let mut header = Header::response_from_request(request.header());
 			header.set_response_code(ResponseCode::NXDomain);
@@ -158,23 +185,36 @@ async fn async_main(config: Config) {
 		info!("add downstream {:?}", downstream);
 		match downstream {
 			DownstreamConfig::Udp(downstream) => {
-				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
+				let socket_addr = downstream.socket_addr();
 				let udp_socket = UdpSocket::bind(&socket_addr)
 					.await
 					.with_context(|| format!("failed to bind udp socket {}", socket_addr))
 					.unwrap_or_else(|err| panic!("{err:?}"));
 				server.register_socket(udp_socket);
+			},
+
+			DownstreamConfig::HttpApi(HttpConfig { downstream, url }) => {
+				tokio::spawn(gotham::init_server(
+					downstream.socket_addr(),
+					build_simple_router(|router| {
+						router.scope("/v1", |router| {
+							api::route(&url, router);
+						});
+					})
+				));
 			}
 		}
 	}
+
 	tokio::spawn(async {
 		let blocklist = blocklist;
 		let lists = config.blocklist.lists;
 		loop {
-			blocklist.update(&lists, false).await;
+			update_blocklist(&blocklist, &lists, false).await;
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
 	});
+
 	info!("🚀 start dns server");
 	server
 		.block_until_done()
@@ -198,9 +238,10 @@ struct BlockConfig {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "lowercase", tag = "protocol")]
+#[serde(deny_unknown_fields, rename_all = "snake_case", tag = "protocol")]
 enum DownstreamConfig {
-	Udp(UdpConfig)
+	Udp(UdpConfig),
+	HttpApi(HttpConfig)
 }
 
 #[derive(Debug, Deserialize)]
@@ -208,6 +249,19 @@ enum DownstreamConfig {
 struct UdpConfig {
 	port: u16,
 	listen: String
+}
+
+impl UdpConfig {
+	fn socket_addr(&self) -> String {
+		format!("{}:{}", self.listen, self.port)
+	}
+}
+
+#[derive(Debug, Deserialize)]
+struct HttpConfig {
+	#[serde(flatten)]
+	downstream: UdpConfig,
+	url: String
 }
 
 fn main() {

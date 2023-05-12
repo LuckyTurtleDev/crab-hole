@@ -132,4 +132,8 @@ impl BlockList {
 	pub(crate) async fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
 		self.trie.read().await.contains(domain, include_subdomains)
 	}
+
+	pub(crate) async fn len(&self) -> usize {
+		self.trie.read().await.len()
+	}
 }

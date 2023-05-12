@@ -37,19 +37,20 @@ struct Stats {
 	running_since: OffsetDateTime,
 	/// The count of all entries on the blocklist.
 	blocklist_len: usize,
-	/// The count of all queries.
-	queries_all: usize,
-	/// The count of all blocked queries.
-	queries_blocked: usize
+	/// The percentage of all queries that were blocked.
+	percentage_blocked: f64
 }
 
 #[read_all]
 fn stats() -> Success<Stats> {
+	let queries_blocked = QUERIES_BLOCKED.load(Ordering::Relaxed);
+	let queries_all = QUERIES_ALL.load(Ordering::Relaxed);
 	Stats {
-		running_since: RUNNING_SINCE.clone(),
+		running_since: *RUNNING_SINCE,
 		blocklist_len: BLOCKLIST_LEN.load(Ordering::Relaxed),
-		queries_all: QUERIES_ALL.load(Ordering::Relaxed),
-		queries_blocked: QUERIES_BLOCKED.load(Ordering::Relaxed)
+		percentage_blocked: (queries_all != 0)
+			.then_some(queries_blocked as f64 / queries_all as f64)
+			.unwrap_or_default()
 	}
 	.into()
 }

@@ -19,6 +19,7 @@ ariadne = "0.2"
 async-trait = "0.1"
 chumsky = "0.9.2"
 directories = "5.0.0"
+gotham = { version = "0.7.1", features = ["derive"], default-features = false }
 gotham_restful = { version = "0.8.3", features = ["cors", "openapi"], default-features = false }
 log = "0.4.17"
 my-env-logger-style = "0.1.0"

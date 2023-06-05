@@ -21,7 +21,7 @@ impl BlockList {
 
 	///Clear and update the current Blocklist, to all entries of the list at from `adlist`.
 	///if `use_cache` is set true, cached list, will not be redownloaded (faster init)
-	pub(crate) async fn update(&self, adlist: &Vec<Url>, restore_from_cache: bool) {
+	pub(crate) async fn update(&self, adlist: &[Url], restore_from_cache: bool) {
 		if restore_from_cache {
 			info!("👮💾 restore blocklist, from cache");
 		} else {

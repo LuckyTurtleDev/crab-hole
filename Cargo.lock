@@ -200,6 +200,7 @@ dependencies = [
  "basic-toml",
  "chumsky",
  "directories",
+ "gotham",
  "gotham_restful",
  "indoc",
  "log",

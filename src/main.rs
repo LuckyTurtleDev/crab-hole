@@ -10,7 +10,6 @@ use anyhow::Context;
 use async_trait::async_trait;
 use blocklist::BlockList;
 use directories::ProjectDirs;
-use gotham_restful::gotham::{self, prelude::*, router::build_simple_router};
 use log::{debug, info};
 use once_cell::sync::Lazy;
 use reqwest::Client;
@@ -86,38 +85,35 @@ static CONFIG_PATH: Lazy<PathBuf> = Lazy::new(|| {
 
 static CLIENT: Lazy<Client> = Lazy::new(Client::new);
 
-/// The timestamp when the server was started.
-static RUNNING_SINCE: Lazy<OffsetDateTime> = Lazy::new(OffsetDateTime::now_utc);
-/// The count of all entries on the blocklist.
-static BLOCKLIST_LEN: AtomicUsize = AtomicUsize::new(0);
-/// The count of all queries.
-static QUERIES_ALL: AtomicUsize = AtomicUsize::new(0);
-/// The count of all blocked queries.
-static QUERIES_BLOCKED: AtomicUsize = AtomicUsize::new(0);
-
-pub(crate) async fn update_blocklist(
-	blocklist: &BlockList,
-	adlist: &Vec<Url>,
-	restore_from_cache: bool
-) {
-	blocklist.update(adlist, restore_from_cache).await;
-	BLOCKLIST_LEN.store(blocklist.len().await, Ordering::Relaxed);
-}
-
 struct CrabHole {
 	blocklist: BlockList,
-	include_subdomains: bool
+	include_subdomains: bool,
+
+	running_since: OffsetDateTime,
+	blocklist_len: AtomicUsize,
+	queries_all: AtomicUsize,
+	queries_blocked: AtomicUsize
 }
 
 impl CrabHole {
-	async fn new(config: &Config) -> Self {
-		let blocklist = BlockList::new();
-		update_blocklist(&blocklist, &config.blocklist.lists, true).await;
+	async fn update_blocklist(&self, adlist: &[Url], restore_from_cache: bool) {
+		self.blocklist.update(adlist, restore_from_cache).await;
+		self.blocklist_len
+			.store(self.blocklist.len().await, Ordering::Relaxed);
+	}
 
-		Self {
-			blocklist,
-			include_subdomains: config.blocklist.include_subdomains
-		}
+	async fn new(config: &Config) -> Self {
+		let this = Self {
+			blocklist: BlockList::new(),
+			include_subdomains: config.blocklist.include_subdomains,
+
+			running_since: OffsetDateTime::now_utc(),
+			blocklist_len: 0.into(),
+			queries_all: 0.into(),
+			queries_blocked: 0.into()
+		};
+		this.update_blocklist(&config.blocklist.lists, true).await;
+		this
 	}
 
 	/// Test if a domain is blocked
@@ -125,6 +121,16 @@ impl CrabHole {
 		self.blocklist
 			.contains(domain.trim_end_matches('.'), self.include_subdomains)
 			.await
+	}
+
+	/// Increase queries count
+	fn inc_queries_counter(&self) {
+		self.queries_all.fetch_add(1, Ordering::Relaxed);
+	}
+
+	/// Increase queries blocked count
+	fn inc_queries_blocked_counter(&self) {
+		self.queries_blocked.fetch_add(1, Ordering::Relaxed);
 	}
 }
 
@@ -157,14 +163,14 @@ impl RequestHandler for Handler {
 		request: &Request,
 		mut response_handler: R
 	) -> ResponseInfo {
-		QUERIES_ALL.fetch_add(1, Ordering::Relaxed);
+		self.crabhole.inc_queries_counter();
 		let lower_query = request.request_info().query;
 		if self
 			.crabhole
 			.is_blocked(&lower_query.name().to_string())
 			.await
 		{
-			QUERIES_BLOCKED.fetch_add(1, Ordering::Relaxed);
+			self.crabhole.inc_queries_blocked_counter();
 			debug!("blocked: {lower_query:?}");
 			let mut header = Header::response_from_request(request.header());
 			header.set_response_code(ResponseCode::NXDomain);
@@ -212,11 +218,7 @@ async fn async_main(config: Config) {
 			DownstreamConfig::HttpApi(HttpConfig { downstream, url }) => {
 				tokio::spawn(gotham::init_server(
 					downstream.socket_addr(),
-					build_simple_router(|router| {
-						router.scope("/v1", |router| {
-							api::route(&url, router);
-						});
-					})
+					api::build_api_router(&url, crabhole.clone())
 				));
 			}
 		}
@@ -226,13 +228,12 @@ async fn async_main(config: Config) {
 		let crabhole = crabhole;
 		let lists = config.blocklist.lists;
 		loop {
-			update_blocklist(&crabhole.blocklist, &lists, false).await;
+			crabhole.update_blocklist(&lists, false).await;
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
 	});
 
 	info!("🚀 start dns server");
-	Lazy::force(&RUNNING_SINCE);
 	server
 		.block_until_done()
 		.await

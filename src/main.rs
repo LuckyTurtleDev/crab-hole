@@ -95,12 +95,6 @@ static QUERIES_ALL: AtomicUsize = AtomicUsize::new(0);
 /// The count of all blocked queries.
 static QUERIES_BLOCKED: AtomicUsize = AtomicUsize::new(0);
 
-struct Handler {
-	catalog: Catalog,
-	blocklist: Arc<BlockList>,
-	include_subdomains: bool
-}
-
 pub(crate) async fn update_blocklist(
 	blocklist: &BlockList,
 	adlist: &Vec<Url>,
@@ -110,8 +104,37 @@ pub(crate) async fn update_blocklist(
 	BLOCKLIST_LEN.store(blocklist.len().await, Ordering::Relaxed);
 }
 
-impl Handler {
+struct CrabHole {
+	blocklist: BlockList,
+	include_subdomains: bool
+}
+
+impl CrabHole {
 	async fn new(config: &Config) -> Self {
+		let blocklist = BlockList::new();
+		update_blocklist(&blocklist, &config.blocklist.lists, true).await;
+
+		Self {
+			blocklist,
+			include_subdomains: config.blocklist.include_subdomains
+		}
+	}
+
+	/// Test if a domain is blocked
+	async fn is_blocked(&self, domain: &str) -> bool {
+		self.blocklist
+			.contains(domain.trim_end_matches('.'), self.include_subdomains)
+			.await
+	}
+}
+
+struct Handler {
+	catalog: Catalog,
+	crabhole: Arc<CrabHole>
+}
+
+impl Handler {
+	fn new(config: &Config, crabhole: Arc<CrabHole>) -> Self {
 		let zone_name = Name::root();
 		let authority = ForwardAuthority::try_from_config(
 			zone_name.clone(),
@@ -123,14 +146,7 @@ impl Handler {
 		let mut catalog = Catalog::new();
 		catalog.upsert(zone_name.into(), Box::new(Arc::new(authority)));
 
-		let blocklist = BlockList::new();
-		update_blocklist(&blocklist, &config.blocklist.lists, true).await;
-
-		Self {
-			catalog,
-			blocklist: Arc::new(blocklist),
-			include_subdomains: config.blocklist.include_subdomains
-		}
+		Self { catalog, crabhole }
 	}
 }
 
@@ -144,11 +160,8 @@ impl RequestHandler for Handler {
 		QUERIES_ALL.fetch_add(1, Ordering::Relaxed);
 		let lower_query = request.request_info().query;
 		if self
-			.blocklist
-			.contains(
-				lower_query.name().to_string().trim_end_matches('.'),
-				self.include_subdomains
-			)
+			.crabhole
+			.is_blocked(&lower_query.name().to_string())
 			.await
 		{
 			QUERIES_BLOCKED.fetch_add(1, Ordering::Relaxed);
@@ -181,8 +194,8 @@ impl RequestHandler for Handler {
 
 #[tokio::main]
 async fn async_main(config: Config) {
-	let handler = Handler::new(&config).await;
-	let blocklist = handler.blocklist.clone();
+	let crabhole = Arc::new(CrabHole::new(&config).await);
+	let handler = Handler::new(&config, crabhole.clone());
 	let mut server = Server::new(handler);
 	for downstream in config.downstream {
 		info!("add downstream {:?}", downstream);
@@ -210,10 +223,10 @@ async fn async_main(config: Config) {
 	}
 
 	tokio::spawn(async {
-		let blocklist = blocklist;
+		let crabhole = crabhole;
 		let lists = config.blocklist.lists;
 		loop {
-			update_blocklist(&blocklist, &lists, false).await;
+			update_blocklist(&crabhole.blocklist, &lists, false).await;
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
 	});

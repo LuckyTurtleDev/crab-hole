@@ -15,6 +15,12 @@ protocol = "udp"
 listen = "[::]" #all ipv6 and ipv4 adress
 port = 8053
 
+[[downstream]]
+protocol = "http_api"
+listen = "[::]"
+port = 8080
+url = "http://localhost:8080"
+
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1111]:853"
 protocol = "tls"

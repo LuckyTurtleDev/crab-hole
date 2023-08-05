@@ -26,6 +26,23 @@ Alternative you can easily build crab-hole by yourself.
 See the [rust book](https://doc.rust-lang.org/cargo/commands/cargo-install.html) for more information about cargo install.
 * make sure that `~/.cargo/bin` is listed at the `PATH` enviroment variable
 
+### Docker
+A docker image is available at the Github Container Registry.
+Example `docker-compoe.yml`:
+```yml
+version: '3.3'
+services:
+    crab-hole:
+        image: 'ghcr.io/luckyturtledev/crab-hole:latest' #semver tags are available
+        ports: #required ports depend on downstream configuration
+            - "53:53/tcp"
+            - "53:53/udp"
+        volumes:
+            - './data:/data'
+            - './config.toml:/data/config.toml:ro'
+```
+[Semver](https://semver.org/) tags like `v0`, `v0.1` and `v0.1.3` are avaible to allow save automatically updates.
+
 # Configuration:
 Example config file using cloudflare as dot (dns-over-tls) upstream.
 ```toml

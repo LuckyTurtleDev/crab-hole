@@ -41,7 +41,7 @@ services:
             - './data:/data'
             - './config.toml:/data/config.toml:ro'
 ```
-[Semver](https://semver.org/) tags like `v0`, `v0.1` and `v0.1.3` are avaible to allow save automatically updates.
+[Semver](https://semver.org/) tags like `v0`, `v0.1` and `v0.1.3` are available to safely allow automatic updates.
 
 # Configuration:
 Example config file using cloudflare as dot (dns-over-tls) upstream.

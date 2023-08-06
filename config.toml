@@ -4,6 +4,10 @@ lists = [
 	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts"
 ]
 
+[api]
+port = 8080
+listen = 127.0.0.1
+
 [[downstream]]
 protocol = "udp"
 listen = "localhost"

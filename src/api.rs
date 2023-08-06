@@ -1,4 +1,13 @@
 use actix_web::{dev::Server, get, middleware, rt, web, App, HttpRequest, HttpServer};
+use serde::Deserialize;
+use std::net::SocketAddr;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Config {
+	port: u16,
+	listen: String,
+}
 
 #[get("/")]
 async fn index(req: HttpRequest) -> &'static str {

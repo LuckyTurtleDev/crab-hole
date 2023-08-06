@@ -170,7 +170,7 @@ async fn async_main(config: Config) {
 		}
 	});
 	info!("🚀 start server");
-	tokio::select! {
+	select! {
 		res = server.block_until_done() => {
 			res.expect("failed to start dns server");
 		}
@@ -185,7 +185,8 @@ async fn async_main(config: Config) {
 struct Config {
 	upstream: ForwardConfig,
 	downstream: Vec<DownstreamConfig>,
-	blocklist: BlockConfig
+	blocklist: BlockConfig,
+	api: api::Config,
 }
 
 #[derive(Debug, Deserialize)]

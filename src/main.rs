@@ -1,6 +1,7 @@
 #![warn(rust_2018_idioms, unreachable_pub)]
 #![forbid(elided_lifetimes_in_paths, unsafe_code)]
 
+mod api;
 mod parser;
 
 use anyhow::Context;
@@ -11,7 +12,7 @@ use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Deserialize;
 use std::{env::var, fs, iter, path::PathBuf, sync::Arc, time::Duration};
-use tokio::{net::UdpSocket, time::sleep};
+use tokio::{net::UdpSocket, select, time::sleep};
 use trust_dns_proto::{
 	op::{header::Header, response_code::ResponseCode},
 	rr::Name
@@ -168,11 +169,15 @@ async fn async_main(config: Config) {
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
 	});
-	info!("🚀 start dns server");
-	server
-		.block_until_done()
-		.await
-		.expect("failed to run dns server");
+	info!("🚀 start server");
+	tokio::select! {
+		res = server.block_until_done() => {
+			res.expect("failed to start dns server");
+		}
+		res = api::actix_main() => {
+			res.expect("failed to start wep(api) server");
+		}
+	};
 }
 
 #[derive(Debug, Deserialize)]

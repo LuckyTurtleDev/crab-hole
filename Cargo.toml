@@ -14,6 +14,7 @@ include = [
 ]
 
 [dependencies]
+actix-web = { version = "4.3.1", default-features = false, features = ["macros"] }
 anyhow = "1.0.70"
 ariadne = "0.2"
 async-trait = "0.1"

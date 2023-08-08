@@ -6,7 +6,7 @@ lists = [
 
 [api]
 port = 8080
-listen = 127.0.0.1
+listen = "127.0.0.1"
 
 [[downstream]]
 protocol = "udp"

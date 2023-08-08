@@ -1,5 +1,5 @@
 use nohash_hasher::BuildNoHashHasher;
-use std::{collections::HashMap as Map, default, iter::Rev};
+use std::{collections::HashMap as Map, iter::Rev};
 
 #[derive(Default)]
 struct Node {
@@ -50,16 +50,16 @@ impl Node {
 }
 
 #[derive(Default)]
-pub struct Trie {
+pub(crate) struct Trie {
 	root: Node
 }
 
 impl Trie {
-	pub fn new() -> Self {
+	pub(crate) fn new() -> Self {
 		Trie::default()
 	}
 
-	pub fn insert(&mut self, domain: &str) {
+	pub(crate) fn insert(&mut self, domain: &str) {
 		let mut iter = domain.bytes().rev();
 		if iter.len() == 0 {
 			return;
@@ -67,12 +67,12 @@ impl Trie {
 		self.root.insert(&mut iter);
 	}
 
-	pub fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
+	pub(crate) fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
 		let mut iter = domain.bytes().rev();
 		self.root.contains(&mut iter, include_subdomains)
 	}
 
-	pub fn shrink_to_fit(&mut self) {
+	pub(crate) fn shrink_to_fit(&mut self) {
 		self.root.shrink_to_fit();
 	}
 }

@@ -12,7 +12,7 @@ use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Deserialize;
 use std::{env::var, fs, iter, path::PathBuf, sync::Arc, time::Duration};
-use tokio::{net::UdpSocket, select, time::sleep};
+use tokio::{net::UdpSocket, time::sleep, try_join};
 use trust_dns_proto::{
 	op::{header::Header, response_code::ResponseCode},
 	rr::Name
@@ -170,14 +170,21 @@ async fn async_main(config: Config) {
 		}
 	});
 	info!("🚀 start server");
-	select! {
-		res = server.block_until_done() => {
-			res.expect("failed to start dns server");
+
+	let res = try_join!(
+		async {
+			server
+				.block_until_done()
+				.await
+				.with_context(|| "failed to start dns server")
+		},
+		async {
+			api::actix_main(config.api)
+				.await
+				.with_context(|| "failed to start web(api) server")
 		}
-		res = api::actix_main() => {
-			res.expect("failed to start wep(api) server");
-		}
-	};
+	);
+	res.unwrap();
 }
 
 #[derive(Debug, Deserialize)]
@@ -186,7 +193,7 @@ struct Config {
 	upstream: ForwardConfig,
 	downstream: Vec<DownstreamConfig>,
 	blocklist: BlockConfig,
-	api: api::Config,
+	api: Option<api::Config>
 }
 
 #[derive(Debug, Deserialize)]

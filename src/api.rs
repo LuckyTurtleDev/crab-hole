@@ -1,26 +1,27 @@
-use actix_web::{dev::Server, get, middleware, rt, web, App, HttpRequest, HttpServer};
+use actix_web::{get, App, middleware::Logger, HttpServer};
 use serde::Deserialize;
-use std::net::SocketAddr;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Config {
 	port: u16,
-	listen: String,
+	listen: String
 }
 
 #[get("/")]
-async fn index(req: HttpRequest) -> &'static str {
-	println!("REQ: {:?}", req);
-	"Hello world!\r\n"
+async fn index() -> &'static str {
+	concat!("🦀 ", env!("CARGO_PKG_NAME"), " v", env!("CARGO_PKG_VERSION"), " is running")
 }
 
-pub(crate) async fn actix_main() -> anyhow::Result<()> {
-	HttpServer::new(|| {
-		App::new().service(web::resource("/").to(|| async { "hello world" }))
-	})
-	.bind(("127.0.0.1", 8080))?
-	.run()
-	.await?;
+pub(crate) async fn actix_main(config: Option<Config>) -> anyhow::Result<()> {
+	if let Some(config) = config {
+		HttpServer::new(|| {
+			App::new().service(index)
+			.wrap(Logger::new("%U by %{User-Agent}i -> %s in %T second"))
+		})
+		.bind((config.listen, config.port))?
+		.run()
+		.await?;
+	}
 	Ok(())
 }

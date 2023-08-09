@@ -169,8 +169,7 @@ async fn async_main(config: Config) {
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
 	});
-	info!("🚀 start server");
-
+	info!("🚀 start dns server");
 	let res = try_join!(
 		async {
 			server
@@ -179,9 +178,9 @@ async fn async_main(config: Config) {
 				.with_context(|| "failed to start dns server")
 		},
 		async {
-			api::actix_main(config.api)
+			api::init(config.api)
 				.await
-				.with_context(|| "failed to start web(api) server")
+				.with_context(|| "failed to start api/web server")
 		}
 	);
 	res.unwrap();

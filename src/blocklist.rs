@@ -2,7 +2,13 @@ use crate::{parser, trie::Trie, CLIENT, LIST_DIR};
 use anyhow::Context;
 use log::{error, info, warn};
 use num_format::{Locale, ToFormattedString};
-use std::path::PathBuf;
+use std::{
+	path::PathBuf,
+	sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc
+	}
+};
 use tokio::{
 	fs::{create_dir_all, read_to_string, write},
 	sync::RwLock
@@ -21,7 +27,12 @@ impl BlockList {
 
 	///Clear and update the current Blocklist, to all entries of the list at from `adlist`.
 	///if `use_cache` is set true, cached list, will not be redownloaded (faster init)
-	pub(crate) async fn update(&self, adlist: &Vec<Url>, restore_from_cache: bool) {
+	pub(crate) async fn update(
+		&self,
+		adlist: &Vec<Url>,
+		restore_from_cache: bool,
+		blocklist_len: Arc<AtomicUsize>
+	) {
 		if restore_from_cache {
 			info!("👮💾 restore blocklist, from cache");
 		} else {
@@ -116,6 +127,7 @@ impl BlockList {
 		info!("shrink blocklist");
 		trie.shrink_to_fit();
 		let blocked_count = trie.len();
+		blocklist_len.store(blocked_count, Ordering::Relaxed);
 		info!(
 			"{} domains are blocked",
 			blocked_count.to_formatted_string(&Locale::en)

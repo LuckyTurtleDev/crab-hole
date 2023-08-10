@@ -1,6 +1,7 @@
 #![warn(rust_2018_idioms, unreachable_pub)]
 #![forbid(elided_lifetimes_in_paths, unsafe_code)]
 
+mod api;
 mod parser;
 
 use anyhow::Context;
@@ -10,8 +11,18 @@ use log::{debug, info};
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Deserialize;
-use std::{env::var, fs, iter, path::PathBuf, sync::Arc, time::Duration};
-use tokio::{net::UdpSocket, time::sleep};
+use std::{
+	env::var,
+	fs, iter,
+	path::PathBuf,
+	sync::{
+		atomic::{AtomicU64, AtomicUsize, Ordering},
+		Arc
+	},
+	time::Duration
+};
+use time::OffsetDateTime;
+use tokio::{net::UdpSocket, time::sleep, try_join};
 use trust_dns_proto::{
 	op::{header::Header, response_code::ResponseCode},
 	rr::Name
@@ -76,14 +87,32 @@ mod trie;
 mod blocklist;
 use blocklist::BlockList;
 
+#[derive(Debug, Clone)]
+struct Stats {
+	total_request: Arc<AtomicU64>,
+	blocked_request: Arc<AtomicU64>,
+	running_since: OffsetDateTime
+}
+
+impl Default for Stats {
+	fn default() -> Self {
+		Self {
+			total_request: Default::default(),
+			blocked_request: Default::default(),
+			running_since: OffsetDateTime::now_utc()
+		}
+	}
+}
+
 struct Handler {
 	catalog: Catalog,
 	blocklist: Arc<BlockList>,
-	include_subdomains: bool
+	include_subdomains: bool,
+	stats: Stats
 }
 
 impl Handler {
-	async fn new(config: &Config) -> Self {
+	async fn new(config: &Config, stats: Stats, blocklist_len: Arc<AtomicUsize>) -> Self {
 		let zone_name = Name::root();
 		let authority = ForwardAuthority::try_from_config(
 			zone_name.clone(),
@@ -96,12 +125,15 @@ impl Handler {
 		catalog.upsert(zone_name.into(), Box::new(Arc::new(authority)));
 
 		let blocklist = BlockList::new();
-		blocklist.update(&config.blocklist.lists, true).await;
+		blocklist
+			.update(&config.blocklist.lists, true, blocklist_len)
+			.await;
 
 		Self {
 			catalog,
 			blocklist: Arc::new(blocklist),
-			include_subdomains: config.blocklist.include_subdomains
+			include_subdomains: config.blocklist.include_subdomains,
+			stats
 		}
 	}
 }
@@ -114,6 +146,7 @@ impl RequestHandler for Handler {
 		mut response_handler: R
 	) -> ResponseInfo {
 		let lower_query = request.request_info().query;
+		self.stats.total_request.fetch_add(1, Ordering::Relaxed);
 		if self
 			.blocklist
 			.contains(
@@ -123,6 +156,7 @@ impl RequestHandler for Handler {
 			.await
 		{
 			debug!("blocked: {lower_query:?}");
+			self.stats.blocked_request.fetch_add(1, Ordering::Relaxed);
 			let mut header = Header::response_from_request(request.header());
 			header.set_response_code(ResponseCode::NXDomain);
 			return response_handler
@@ -151,7 +185,9 @@ impl RequestHandler for Handler {
 
 #[tokio::main]
 async fn async_main(config: Config) {
-	let handler = Handler::new(&config).await;
+	let stats = Stats::default();
+	let blocklist_len = Arc::new(AtomicUsize::new(0));
+	let handler = Handler::new(&config, stats.clone(), blocklist_len.clone()).await;
 	let blocklist = handler.blocklist.clone();
 	let mut server = Server::new(handler);
 	for downstream in config.downstream {
@@ -167,19 +203,32 @@ async fn async_main(config: Config) {
 			}
 		}
 	}
-	tokio::spawn(async {
+	let blocklist_len_move = blocklist_len.clone();
+	tokio::spawn(async move {
 		let blocklist = blocklist;
 		let lists = config.blocklist.lists;
 		loop {
-			blocklist.update(&lists, false).await;
+			blocklist
+				.update(&lists, false, blocklist_len_move.clone())
+				.await;
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
 	});
 	info!("🚀 start dns server");
-	server
-		.block_until_done()
-		.await
-		.expect("failed to run dns server");
+	let res = try_join!(
+		async {
+			server
+				.block_until_done()
+				.await
+				.with_context(|| "failed to start dns server")
+		},
+		async {
+			api::init(config.api, stats, blocklist_len.clone())
+				.await
+				.with_context(|| "failed to start api/web server")
+		}
+	);
+	res.unwrap();
 }
 
 #[derive(Debug, Deserialize)]
@@ -187,7 +236,8 @@ async fn async_main(config: Config) {
 struct Config {
 	upstream: ForwardConfig,
 	downstream: Vec<DownstreamConfig>,
-	blocklist: BlockConfig
+	blocklist: BlockConfig,
+	api: Option<api::Config>
 }
 
 #[derive(Debug, Deserialize)]

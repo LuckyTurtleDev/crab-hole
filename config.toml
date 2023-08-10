@@ -5,6 +5,12 @@ lists = [
 	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt"
 ]
 
+[api]
+port = 8080
+listen = "127.0.0.1"
+show_doc = true # OpenAPI doc loads content from third party websites
+admin_key = "1234"
+
 [[downstream]]
 protocol = "udp"
 listen = "localhost"

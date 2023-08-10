@@ -8,7 +8,8 @@ lists = [
 [api]
 port = 8080
 listen = "127.0.0.1"
-show_doc = true # doc loads content from third party websites
+show_doc = true # OpenAPI doc loads content from third party websites
+admin_key = "1234"
 
 [[downstream]]
 protocol = "udp"

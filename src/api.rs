@@ -1,5 +1,5 @@
 use log::info;
-use poem::{listener::TcpListener, Route, Server};
+use poem::{http::StatusCode, listener::TcpListener, Route, Server};
 use poem_openapi::{
 	auth::ApiKey,
 	payload::{Html, Json},
@@ -22,7 +22,7 @@ pub(crate) struct Config {
 	listen: String,
 	#[serde(default)]
 	show_doc: bool,
-	key: Option<String>
+	admin_key: Option<String>
 }
 
 #[derive(Debug, Object)]
@@ -45,6 +45,17 @@ impl Example for Info {
 #[oai(ty = "api_key", key_in = "query", key_name = "key")]
 struct Key(ApiKey);
 
+impl Key {
+	fn validate(&self, api: &Api) -> poem::Result<()> {
+		if let Some(key) = &api.key {
+			if key == &self.0.key {
+				return Ok(());
+			}
+		}
+		Err(poem::Error::from_status(StatusCode::UNAUTHORIZED))
+	}
+}
+
 #[derive(Debug, Object)]
 struct PubStats {
 	blocked_ratio: f32,
@@ -65,7 +76,8 @@ struct Stats {
 struct Api {
 	doc_enable: bool,
 	stats: crate::Stats,
-	blocklist_len: Arc<AtomicUsize>
+	blocklist_len: Arc<AtomicUsize>,
+	key: Option<String>
 }
 
 #[OpenApi]
@@ -100,17 +112,18 @@ impl Api {
 
 	/// private statistics
 	#[oai(path = "/all_stats.json", method = "get")]
-	async fn all_stats(&self, key: Key) -> Json<Stats> {
-		Json(Stats {
+	async fn all_stats(&self, key: Key) -> poem::Result<Json<Stats>> {
+		key.validate(self)?;
+		Ok(Json(Stats {
 			total_request: self.stats.total_request.load(Ordering::Relaxed),
 			blocked_request: self.stats.blocked_request.load(Ordering::Relaxed),
 			blocklist_len: self.blocklist_len.load(Ordering::Relaxed),
 			running_since: self.stats.running_since
-		})
+		}))
 	}
 
 	/// landing page
-	#[oai(path = "/", method = "get")]
+	#[oai(path = "/", method = "get", hidden = true)]
 	async fn index(&self) -> Html<String> {
 		let doc_hint = if self.doc_enable {
 			"<br>OpenApi doc is available <a href=\"/doc\">here</a>."
@@ -133,7 +146,9 @@ pub(crate) async fn init(
 		let address = format!("{}:{}", config.listen, config.port);
 		let api_data = Api {
 			doc_enable: config.show_doc,
-			stats
+			stats,
+			blocklist_len,
+			key: config.admin_key
 		};
 		let api_service =
 			OpenApiService::new(api_data, CARGO_PKG_NAME, CARGO_PKG_VERSION)

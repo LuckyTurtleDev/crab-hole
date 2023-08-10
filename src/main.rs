@@ -112,7 +112,7 @@ struct Handler {
 }
 
 impl Handler {
-	async fn new(config: &Config, stats: Stats) -> Self {
+	async fn new(config: &Config, stats: Stats, blocklist_len: Arc<AtomicUsize>) -> Self {
 		let zone_name = Name::root();
 		let authority = ForwardAuthority::try_from_config(
 			zone_name.clone(),
@@ -125,7 +125,9 @@ impl Handler {
 		catalog.upsert(zone_name.into(), Box::new(Arc::new(authority)));
 
 		let blocklist = BlockList::new();
-		blocklist.update(&config.blocklist.lists, true).await;
+		blocklist
+			.update(&config.blocklist.lists, true, blocklist_len)
+			.await;
 
 		Self {
 			catalog,
@@ -185,7 +187,7 @@ impl RequestHandler for Handler {
 async fn async_main(config: Config) {
 	let stats = Stats::default();
 	let blocklist_len = Arc::new(AtomicUsize::new(0));
-	let handler = Handler::new(&config, stats.clone()).await;
+	let handler = Handler::new(&config, stats.clone(), blocklist_len.clone()).await;
 	let blocklist = handler.blocklist.clone();
 	let mut server = Server::new(handler);
 	for downstream in config.downstream {
@@ -201,11 +203,14 @@ async fn async_main(config: Config) {
 			}
 		}
 	}
-	tokio::spawn(async {
+	let blocklist_len_move = blocklist_len.clone();
+	tokio::spawn(async move {
 		let blocklist = blocklist;
 		let lists = config.blocklist.lists;
 		loop {
-			blocklist.update(&lists, false, blocklist_len).await;
+			blocklist
+				.update(&lists, false, blocklist_len_move.clone())
+				.await;
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
 	});
@@ -218,7 +223,7 @@ async fn async_main(config: Config) {
 				.with_context(|| "failed to start dns server")
 		},
 		async {
-			api::init(config.api, stats, blocklist_len)
+			api::init(config.api, stats, blocklist_len.clone())
 				.await
 				.with_context(|| "failed to start api/web server")
 		}

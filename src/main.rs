@@ -227,3 +227,12 @@ fn main() {
 	debug!("{:#?}", config);
 	async_main(config);
 }
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn config_file() {
+		let config = include_bytes!("../config.toml");
+		let _: super::Config = toml::from_slice(config).unwrap();
+	}
+}

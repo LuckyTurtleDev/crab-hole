@@ -10,7 +10,8 @@ include = [
   "src/**/*",
   "Cargo.toml",
   "LICENSE*",
-  "README.md"
+  "README.md",
+  "config.toml"
 ]
 
 [dependencies]

@@ -153,9 +153,13 @@ pub(crate) async fn init(
 		let api_service =
 			OpenApiService::new(api_data, CARGO_PKG_NAME, CARGO_PKG_VERSION)
 				.server(&address);
-		let doc = api_service.redoc();
+		let doc = if config.show_doc {
+			Some(api_service.redoc())
+		} else {
+			None
+		};
 		let server = Route::new().nest("/", api_service);
-		let server = if config.show_doc {
+		let server = if let Some(doc) = doc {
 			server.nest("/doc", doc)
 		} else {
 			server

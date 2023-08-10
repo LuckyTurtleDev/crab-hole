@@ -1,9 +1,9 @@
 [package]
 name = "crab-hole"
-version = "0.1.0"
+version = "0.1.3"
 edition = "2021"
-description = "A pihole clone written using Trust-DNS"
-repository = "https://github.com/LuckyTurtleDev/my-env-logger-style"
+description = "Pi-Hole clone written in rust using trust-dns "
+repository = "https://github.com/LuckyTurtleDev/crab-hole"
 keywords = ["DNS", "BIND", "named", "dnssec"]
 license = "AGPL-3.0-or-later"
 include = [
@@ -22,6 +22,7 @@ directories = "5.0.0"
 log = "0.4.17"
 my-env-logger-style = "0.1.0"
 nohash-hasher = "0.2.0"
+num-format = "0.4.4"
 once_cell = { version = "1.17.1", features = ["parking_lot"] }
 poem = "1.3.57"
 poem-openapi = { version = "3.0.1", features = ["redoc"] }

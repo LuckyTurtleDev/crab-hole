@@ -1,8 +1,16 @@
 use ariadne::{Label, Report, ReportKind, Source};
 use chumsky::{error::SimpleReason, prelude::*};
-use std::net::IpAddr;
+use std::{fmt::Display, net::IpAddr};
 
 type ParserError = Simple<char>;
+type Span = <ParserError as chumsky::error::Error<char>>::Span;
+
+fn convert_error<E>(err: E, span: Span) -> ParserError
+where
+	E: Display
+{
+	ParserError::custom(span, format!("{err}"))
+}
 
 /// A domain. Never contains a trailing punct.
 pub(crate) struct Domain(pub(crate) String);
@@ -53,7 +61,7 @@ fn report_err(buf: &str, path_str: &str, err: Vec<ParserError>) {
 						"Expected {}",
 						e.expected()
 							.map(|ex| match ex {
-								Some(ex) => ex.to_string(),
+								Some(ex) => format!("{ex:?}"),
 								None => "end of file".to_owned()
 							})
 							.collect::<Vec<_>>()
@@ -169,7 +177,14 @@ impl Line {
 				filter(|c: &char| c.is_ascii_hexdigit() || *c == '.' || *c == ':')
 					.repeated()
 					.at_least(2)
-					.map(|ip| Some(ip.into_iter().collect::<String>().parse().unwrap()))
+					.try_map(|ip, span| {
+						Ok(Some(
+							ip.into_iter()
+								.collect::<String>()
+								.parse()
+								.map_err(|err| convert_error(err, span))?
+						))
+					})
 					.then(choice((
 						just("%")
 							.ignore_then(

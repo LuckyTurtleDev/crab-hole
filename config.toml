@@ -1,7 +1,8 @@
 [blocklist]
 include_subdomains = true
 lists = [
-	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts"
+	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts",
+	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt"
 ]
 
 [api]

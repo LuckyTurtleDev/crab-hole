@@ -117,7 +117,10 @@ impl RequestHandler for Handler {
 		let lower_query = request.request_info().query;
 		if self
 			.blocklist
-			.contains(&lower_query.to_string(), self.include_subdomains)
+			.contains(
+				lower_query.name().to_string().trim_end_matches('.'),
+				self.include_subdomains
+			)
 			.await
 		{
 			debug!("blocked: {lower_query:?}");
@@ -134,7 +137,11 @@ impl RequestHandler for Handler {
 					)
 				)
 				.await
-				.unwrap(); //when does this fail?
+				.unwrap_or_else(|_| {
+					let mut header = Header::new();
+					header.set_response_code(ResponseCode::ServFail);
+					header.into()
+				});
 		} else {
 			debug!("{lower_query:?}");
 		}

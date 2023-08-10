@@ -47,6 +47,15 @@ impl Node {
 			child.shrink_to_fit();
 		}
 	}
+
+	fn len(&self, len: &mut usize) {
+		if self.is_in {
+			*len += 1;
+		}
+		for (_, child) in &self.childs {
+			child.len(len);
+		}
+	}
 }
 
 #[derive(Default)]
@@ -74,6 +83,12 @@ impl Trie {
 
 	pub(crate) fn shrink_to_fit(&mut self) {
 		self.root.shrink_to_fit();
+	}
+
+	pub(crate) fn len(&self) -> usize {
+		let mut len: usize = 0;
+		self.root.len(&mut len);
+		len
 	}
 }
 

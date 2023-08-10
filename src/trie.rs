@@ -1,5 +1,5 @@
 use nohash_hasher::BuildNoHashHasher;
-use std::{collections::HashMap as Map, iter::Rev};
+use std::{collections::HashMap as Map, iter::Rev, sync::Mutex};
 
 #[derive(Default)]
 struct Node {

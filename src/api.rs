@@ -1,10 +1,17 @@
 use log::info;
 use poem::{listener::TcpListener, Route, Server};
 use poem_openapi::{
+	auth::ApiKey,
 	payload::{Html, Json},
-	Object, OpenApi, OpenApiService
+	types::Example,
+	Object, OpenApi, OpenApiService, SecurityScheme
 };
 use serde::Deserialize;
+use std::sync::{
+	atomic::{AtomicUsize, Ordering},
+	Arc
+};
+use time::OffsetDateTime;
 
 use crate::{CARGO_PKG_NAME, CARGO_PKG_VERSION};
 
@@ -14,18 +21,51 @@ pub(crate) struct Config {
 	port: u16,
 	listen: String,
 	#[serde(default)]
-	show_doc: bool
+	show_doc: bool,
+	key: Option<String>
 }
 
 #[derive(Debug, Object)]
+#[oai(example = true)]
 struct Info {
 	#[oai(rename = "crate")]
 	krate: String,
 	version: String
 }
+impl Example for Info {
+	fn example() -> Self {
+		Self {
+			krate: CARGO_PKG_NAME.to_owned(),
+			version: CARGO_PKG_VERSION.to_owned()
+		}
+	}
+}
+
+#[derive(SecurityScheme)]
+#[oai(ty = "api_key", key_in = "query", key_name = "key")]
+struct Key(ApiKey);
+
+#[derive(Debug, Object)]
+struct PubStats {
+	blocked_ratio: f32,
+	blocklist_len: usize,
+	running_since: OffsetDateTime
+}
+
+#[derive(Debug, Object)]
+struct Stats {
+	/// total dns request since start
+	total_request: u64,
+	/// blocked dns request since start
+	blocked_request: u64,
+	blocklist_len: usize,
+	running_since: OffsetDateTime
+}
 
 struct Api {
-	doc_enable: bool
+	doc_enable: bool,
+	stats: crate::Stats,
+	blocklist_len: Arc<AtomicUsize>
 }
 
 #[OpenApi]
@@ -36,6 +76,36 @@ impl Api {
 		Json(Info {
 			krate: CARGO_PKG_NAME.to_owned(),
 			version: CARGO_PKG_VERSION.to_owned()
+		})
+	}
+
+	/// basic statistics
+	#[oai(path = "/stats.json", method = "get")]
+	async fn stats(&self) -> Json<PubStats> {
+		let total_request = self.stats.total_request.load(Ordering::Relaxed);
+		let blocked_ratio = if total_request == 0 {
+			0.0
+		} else {
+			self.stats.blocked_request.load(Ordering::Relaxed) as f32
+				/ total_request as f32
+		};
+		// privacy: round to three digs
+		let blocked_ratio = (blocked_ratio * 100.0).round() / 100.0;
+		Json(PubStats {
+			blocked_ratio,
+			blocklist_len: self.blocklist_len.load(Ordering::Relaxed),
+			running_since: self.stats.running_since
+		})
+	}
+
+	/// private statistics
+	#[oai(path = "/all_stats.json", method = "get")]
+	async fn all_stats(&self, key: Key) -> Json<Stats> {
+		Json(Stats {
+			total_request: self.stats.total_request.load(Ordering::Relaxed),
+			blocked_request: self.stats.blocked_request.load(Ordering::Relaxed),
+			blocklist_len: self.blocklist_len.load(Ordering::Relaxed),
+			running_since: self.stats.running_since
 		})
 	}
 
@@ -54,11 +124,16 @@ impl Api {
 }
 
 /// start api/web server if config is Some
-pub(crate) async fn init(config: Option<Config>) -> anyhow::Result<()> {
+pub(crate) async fn init(
+	config: Option<Config>,
+	stats: crate::Stats,
+	blocklist_len: Arc<AtomicUsize>
+) -> anyhow::Result<()> {
 	if let Some(config) = config {
 		let address = format!("{}:{}", config.listen, config.port);
 		let api_data = Api {
-			doc_enable: config.show_doc
+			doc_enable: config.show_doc,
+			stats
 		};
 		let api_service =
 			OpenApiService::new(api_data, CARGO_PKG_NAME, CARGO_PKG_VERSION)

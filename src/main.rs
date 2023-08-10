@@ -11,7 +11,17 @@ use log::{debug, info};
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::Deserialize;
-use std::{env::var, fs, iter, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+	env::var,
+	fs, iter,
+	path::PathBuf,
+	sync::{
+		atomic::{AtomicU64, AtomicUsize, Ordering},
+		Arc
+	},
+	time::Duration
+};
+use time::OffsetDateTime;
 use tokio::{net::UdpSocket, time::sleep, try_join};
 use trust_dns_proto::{
 	op::{header::Header, response_code::ResponseCode},
@@ -77,14 +87,32 @@ mod trie;
 mod blocklist;
 use blocklist::BlockList;
 
+#[derive(Debug, Clone)]
+struct Stats {
+	total_request: Arc<AtomicU64>,
+	blocked_request: Arc<AtomicU64>,
+	running_since: OffsetDateTime
+}
+
+impl Default for Stats {
+	fn default() -> Self {
+		Self {
+			total_request: Default::default(),
+			blocked_request: Default::default(),
+			running_since: OffsetDateTime::now_utc()
+		}
+	}
+}
+
 struct Handler {
 	catalog: Catalog,
 	blocklist: Arc<BlockList>,
-	include_subdomains: bool
+	include_subdomains: bool,
+	stats: Stats
 }
 
 impl Handler {
-	async fn new(config: &Config) -> Self {
+	async fn new(config: &Config, stats: Stats) -> Self {
 		let zone_name = Name::root();
 		let authority = ForwardAuthority::try_from_config(
 			zone_name.clone(),
@@ -102,7 +130,8 @@ impl Handler {
 		Self {
 			catalog,
 			blocklist: Arc::new(blocklist),
-			include_subdomains: config.blocklist.include_subdomains
+			include_subdomains: config.blocklist.include_subdomains,
+			stats
 		}
 	}
 }
@@ -115,6 +144,7 @@ impl RequestHandler for Handler {
 		mut response_handler: R
 	) -> ResponseInfo {
 		let lower_query = request.request_info().query;
+		self.stats.total_request.fetch_add(1, Ordering::Relaxed);
 		if self
 			.blocklist
 			.contains(
@@ -124,6 +154,7 @@ impl RequestHandler for Handler {
 			.await
 		{
 			debug!("blocked: {lower_query:?}");
+			self.stats.blocked_request.fetch_add(1, Ordering::Relaxed);
 			let mut header = Header::response_from_request(request.header());
 			header.set_response_code(ResponseCode::NXDomain);
 			return response_handler
@@ -152,7 +183,9 @@ impl RequestHandler for Handler {
 
 #[tokio::main]
 async fn async_main(config: Config) {
-	let handler = Handler::new(&config).await;
+	let stats = Stats::default();
+	let blocklist_len = Arc::new(AtomicUsize::new(0));
+	let handler = Handler::new(&config, stats.clone()).await;
 	let blocklist = handler.blocklist.clone();
 	let mut server = Server::new(handler);
 	for downstream in config.downstream {
@@ -172,7 +205,7 @@ async fn async_main(config: Config) {
 		let blocklist = blocklist;
 		let lists = config.blocklist.lists;
 		loop {
-			blocklist.update(&lists, false).await;
+			blocklist.update(&lists, false, blocklist_len).await;
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
 	});
@@ -185,7 +218,7 @@ async fn async_main(config: Config) {
 				.with_context(|| "failed to start dns server")
 		},
 		async {
-			api::init(config.api)
+			api::init(config.api, stats, blocklist_len)
 				.await
 				.with_context(|| "failed to start api/web server")
 		}

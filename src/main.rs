@@ -213,7 +213,7 @@ async fn load_cert_and_key(
 	}
 	let key =
 		rustls_pemfile::read_all(&mut BufReader::new(File::open(&key_path).with_context(|| format!("failed to open {:?}", key_path))?))
-			.with_context(|| format!("failed to prase {:?}", key_path))?
+			.with_context(|| format!("failed to parse {:?}", key_path))?
 			.iter()
 			.find_map(|item| match item {
 				rustls_pemfile::Item::ECKey(key) => Some(key),

@@ -198,7 +198,7 @@ async fn load_cert_and_key(
 		File::open(&cert_path)
 			.with_context(|| format!("failed to open {:?}", cert_path))?
 	))
-	.with_context(|| format!("failed to prase {:?}", cert_path))?
+	.with_context(|| format!("failed to parse {:?}", cert_path))?
 	.iter()
 	.filter_map(|cert| match cert {
 		rustls_pemfile::Item::X509Certificate(cert) => Some(Certificate(cert.to_owned())),

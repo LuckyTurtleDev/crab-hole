@@ -25,8 +25,8 @@ port = 8053
 protocol = "tls"
 listen = "127.0.0.1"
 port = 8054
-certificate = "oo"
-key = "baar"
+certificate = "dns.lukas1818.de/dns.lukas1818.de.crt"
+key = "dns.lukas1818.de/dns.lukas1818.de.key"
 
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1111]:853"

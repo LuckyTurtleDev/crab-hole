@@ -4,7 +4,7 @@
 mod api;
 mod parser;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use async_trait::async_trait;
 use directories::ProjectDirs;
 use log::{debug, info};
@@ -190,6 +190,42 @@ impl RequestHandler for Handler {
 	}
 }
 
+async fn load_cert_and_key(
+	cert_path: PathBuf,
+	key_path: PathBuf
+) -> anyhow::Result<(Vec<Certificate>, PrivateKey)> {
+	let certificates: Vec<_> = rustls_pemfile::read_all(&mut BufReader::new(
+		File::open(&cert_path)
+			.with_context(|| format!("failed to open {:?}", cert_path))?
+	))
+	.with_context(|| format!("failed to prase {:?}", cert_path))?
+	.iter()
+	.filter_map(|cert| match cert {
+		rustls_pemfile::Item::X509Certificate(cert) => Some(Certificate(cert.to_owned())),
+		_ => None
+	})
+	.collect();
+	if certificates.is_empty() {
+		bail!(format!(
+			"no DER-encoded x509 certificate found in {:?}",
+			cert_path
+		));
+	}
+	let key =
+		rustls_pemfile::read_all(&mut BufReader::new(File::open(&key_path).with_context(|| format!("failed to open {:?}", key_path))?))
+			.with_context(|| format!("failed to prase {:?}", key_path))?
+			.iter()
+			.find_map(|item| match item {
+				rustls_pemfile::Item::ECKey(key) => Some(key),
+				rustls_pemfile::Item::RSAKey(key) => Some(key),
+				rustls_pemfile::Item::PKCS8Key(key) => Some(key),
+				_ => None
+			})
+			.map(|key| PrivateKey(key.to_owned()))
+			.ok_or_else(|| anyhow::Error::msg("no private key found in {key_path:?}\n expected RSA/PKCS8 DER-encoded plaintext or Sec1-encoded plaintext ECKey"))?;
+	Ok((certificates, key))
+}
+
 #[tokio::main]
 async fn async_main(config: Config) {
 	let stats = Stats::default();
@@ -209,50 +245,21 @@ async fn async_main(config: Config) {
 				server.register_socket(udp_socket);
 			},
 			DownstreamConfig::Tls(downstream) => {
+				let cert_and_key =
+					load_cert_and_key(downstream.certificate, downstream.key)
+						.await
+						.with_context(|| "failed to load certificate or private key")
+						.unwrap_or_else(|err| panic!("{err:?}"));
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
 				let tcp_listener = TcpListener::bind(&socket_addr)
 					.await
 					.with_context(|| format!("failed to bind tcp socket {}", socket_addr))
 					.unwrap_or_else(|err| panic!("{err:?}"));
-				let certificates = rustls_pemfile::read_all(&mut BufReader::new(
-					File::open(
-						"/home/lukas/git/crab-hole/dns.lukas1818.de/dns.lukas1818.de.crt"
-					)
-					.unwrap()
-				))
-				.unwrap()
-				.iter()
-				.map(|cert| match cert {
-					rustls_pemfile::Item::X509Certificate(cert) => {
-						Certificate(cert.to_owned())
-					},
-					_ => panic!()
-				})
-				.collect();
-				let key = rustls_pemfile::read_all(&mut BufReader::new(
-					File::open(
-						"/home/lukas/git/crab-hole/dns.lukas1818.de/dns.lukas1818.de.key"
-					)
-					.unwrap()
-				))
-				.unwrap();
-				let key = key.first().unwrap();
-				let key = PrivateKey(
-					match key {
-						rustls_pemfile::Item::Crl(key) => key,
-						rustls_pemfile::Item::X509Certificate(key) => key,
-						rustls_pemfile::Item::RSAKey(key) => key,
-						rustls_pemfile::Item::PKCS8Key(key) => key,
-						rustls_pemfile::Item::ECKey(key) => key,
-						&_ => panic!("unusported `rustls_pemfile::Item` variant, please report this issue at github"),	
-					}
-					.to_owned()
-				);
 				server
 					.register_tls_listener(
 						tcp_listener,
-						Duration::from_secs(3),
-						(certificates, key)
+						Duration::from_millis(downstream.timeout_ms),
+						cert_and_key
 					)
 					.with_context(|| "failed to register tls downstream")
 					.unwrap_or_else(|err| panic!("{err:?}"));
@@ -310,6 +317,10 @@ enum DownstreamConfig {
 	Tls(TlsConfig)
 }
 
+fn default_timeout() -> u64 {
+	3000
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct UdpConfig {
@@ -323,7 +334,9 @@ struct TlsConfig {
 	port: u16,
 	listen: String,
 	certificate: PathBuf,
-	key: PathBuf
+	key: PathBuf,
+	#[serde(default = "default_timeout")]
+	timeout_ms: u64
 }
 
 fn main() {

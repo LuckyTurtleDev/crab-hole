@@ -10,10 +10,13 @@ use directories::ProjectDirs;
 use log::{debug, info};
 use once_cell::sync::Lazy;
 use reqwest::Client;
+use rustls::{Certificate, PrivateKey};
 use serde::Deserialize;
 use std::{
 	env::var,
-	fs, iter,
+	fs::{self, File},
+	io::BufReader,
+	iter,
 	path::PathBuf,
 	sync::{
 		atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -22,7 +25,11 @@ use std::{
 	time::Duration
 };
 use time::OffsetDateTime;
-use tokio::{net::UdpSocket, time::sleep, try_join};
+use tokio::{
+	net::{TcpListener, UdpSocket},
+	time::sleep,
+	try_join
+};
 use trust_dns_proto::{
 	op::{header::Header, response_code::ResponseCode},
 	rr::Name
@@ -200,6 +207,55 @@ async fn async_main(config: Config) {
 					.with_context(|| format!("failed to bind udp socket {}", socket_addr))
 					.unwrap_or_else(|err| panic!("{err:?}"));
 				server.register_socket(udp_socket);
+			},
+			DownstreamConfig::Tls(downstream) => {
+				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
+				let tcp_listener = TcpListener::bind(&socket_addr)
+					.await
+					.with_context(|| format!("failed to bind tcp socket {}", socket_addr))
+					.unwrap_or_else(|err| panic!("{err:?}"));
+				let certificates = rustls_pemfile::read_all(&mut BufReader::new(
+					File::open(
+						"/home/lukas/git/crab-hole/dns.lukas1818.de/dns.lukas1818.de.crt"
+					)
+					.unwrap()
+				))
+				.unwrap()
+				.iter()
+				.map(|cert| match cert {
+					rustls_pemfile::Item::X509Certificate(cert) => {
+						Certificate(cert.to_owned())
+					},
+					_ => panic!()
+				})
+				.collect();
+				let key = rustls_pemfile::read_all(&mut BufReader::new(
+					File::open(
+						"/home/lukas/git/crab-hole/dns.lukas1818.de/dns.lukas1818.de.key"
+					)
+					.unwrap()
+				))
+				.unwrap();
+				let key = key.first().unwrap();
+				let key = PrivateKey(
+					match key {
+						rustls_pemfile::Item::Crl(key) => key,
+						rustls_pemfile::Item::X509Certificate(key) => key,
+						rustls_pemfile::Item::RSAKey(key) => key,
+						rustls_pemfile::Item::PKCS8Key(key) => key,
+						rustls_pemfile::Item::ECKey(key) => key,
+						&_ => panic!("unusported `rustls_pemfile::Item` variant, please report this issue at github"),	
+					}
+					.to_owned()
+				);
+				server
+					.register_tls_listener(
+						tcp_listener,
+						Duration::from_secs(3),
+						(certificates, key)
+					)
+					.with_context(|| "failed to register tls downstream")
+					.unwrap_or_else(|err| panic!("{err:?}"));
 			}
 		}
 	}
@@ -250,7 +306,8 @@ struct BlockConfig {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "lowercase", tag = "protocol")]
 enum DownstreamConfig {
-	Udp(UdpConfig)
+	Udp(UdpConfig),
+	Tls(TlsConfig)
 }
 
 #[derive(Debug, Deserialize)]
@@ -258,6 +315,15 @@ enum DownstreamConfig {
 struct UdpConfig {
 	port: u16,
 	listen: String
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TlsConfig {
+	port: u16,
+	listen: String,
+	certificate: PathBuf,
+	key: PathBuf
 }
 
 fn main() {

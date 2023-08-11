@@ -21,6 +21,13 @@ protocol = "udp"
 listen = "[::]" #all ipv6 and ipv4 adress
 port = 8053
 
+[[downstream]]
+protocol = "tls"
+listen = "127.0.0.1"
+port = 8054
+certificate = "oo"
+key = "baar"
+
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1111]:853"
 protocol = "tls"

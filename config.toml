@@ -28,6 +28,22 @@ port = 8054
 certificate = "dns.lukas1818.de/dns.lukas1818.de.crt"
 key = "dns.lukas1818.de/dns.lukas1818.de.key"
 
+[[downstream]]
+protocol = "https"
+listen = "127.0.0.1"
+port = 8055
+certificate = "dns.lukas1818.de/dns.lukas1818.de.crt"
+key = "dns.lukas1818.de/dns.lukas1818.de.key"
+dns_hostname = "dns.lukas1818.de"
+
+[[downstream]]
+protocol = "quic"
+listen = "127.0.0.1"
+port = 8055
+certificate = "dns.lukas1818.de/dns.lukas1818.de.crt"
+key = "dns.lukas1818.de/dns.lukas1818.de.key"
+dns_hostname = "dns.lukas1818.de"
+
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1111]:853"
 protocol = "tls"

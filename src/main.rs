@@ -258,6 +258,44 @@ async fn async_main(config: Config) {
 						cert_and_key
 					)
 					.expect("failed to register tls downstream")
+			},
+			DownstreamConfig::Https(downstream) => {
+				let cert_and_key =
+					load_cert_and_key(downstream.certificate, downstream.key)
+						.await
+						.expect("failed to load certificate or private key");
+				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
+				let tcp_listener = TcpListener::bind(&socket_addr)
+					.await
+					.with_context(|| format!("failed to bind tcp socket {}", socket_addr))
+					.unwrap_or_else(|err| panic!("{err:?}"));
+				server
+					.register_https_listener(
+						tcp_listener,
+						Duration::from_millis(downstream.timeout_ms),
+						cert_and_key,
+						downstream.dns_hostname
+					)
+					.expect("failed to register tls downstream")
+			},
+			DownstreamConfig::Quic(downstream) => {
+				let cert_and_key =
+					load_cert_and_key(downstream.certificate, downstream.key)
+						.await
+						.expect("failed to load certificate or private key");
+				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
+				let udp_socket = UdpSocket::bind(&socket_addr)
+					.await
+					.with_context(|| format!("failed to bind tcp socket {}", socket_addr))
+					.unwrap_or_else(|err| panic!("{err:?}"));
+				server
+					.register_quic_listener(
+						udp_socket,
+						Duration::from_millis(downstream.timeout_ms),
+						cert_and_key,
+						downstream.dns_hostname
+					)
+					.expect("failed to register tls downstream")
 			}
 		}
 	}
@@ -309,7 +347,9 @@ struct BlockConfig {
 #[serde(deny_unknown_fields, rename_all = "lowercase", tag = "protocol")]
 enum DownstreamConfig {
 	Udp(UdpConfig),
-	Tls(TlsConfig)
+	Tls(TlsConfig),
+	Https(HttpsAndQuicConfig),
+	Quic(HttpsAndQuicConfig)
 }
 
 fn default_timeout() -> u64 {
@@ -332,6 +372,18 @@ struct TlsConfig {
 	key: PathBuf,
 	#[serde(default = "default_timeout")]
 	timeout_ms: u64
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HttpsAndQuicConfig {
+	port: u16,
+	listen: String,
+	certificate: PathBuf,
+	key: PathBuf,
+	#[serde(default = "default_timeout")]
+	timeout_ms: u64,
+	dns_hostname: String
 }
 
 fn main() {

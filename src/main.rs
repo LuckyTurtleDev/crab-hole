@@ -245,8 +245,7 @@ async fn async_main(config: Config) {
 				let cert_and_key =
 					load_cert_and_key(downstream.certificate, downstream.key)
 						.await
-						.with_context(|| "failed to load certificate or private key")
-						.unwrap_or_else(|err| panic!("{err:?}"));
+						.expect("failed to load certificate or private key");
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
 				let tcp_listener = TcpListener::bind(&socket_addr)
 					.await
@@ -258,8 +257,7 @@ async fn async_main(config: Config) {
 						Duration::from_millis(downstream.timeout_ms),
 						cert_and_key
 					)
-					.with_context(|| "failed to register tls downstream")
-					.unwrap_or_else(|err| panic!("{err:?}"));
+					.expect("failed to register tls downstream")
 			}
 		}
 	}

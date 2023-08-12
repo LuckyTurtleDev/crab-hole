@@ -206,10 +206,7 @@ async fn load_cert_and_key(
 	})
 	.collect();
 	if certificates.is_empty() {
-		bail!(format!(
-			"no DER-encoded x509 certificate found in {:?}",
-			cert_path
-		));
+		bail!(format!("x509 certificate found in {:?}", cert_path));
 	}
 	let key =
 		rustls_pemfile::read_all(&mut BufReader::new(File::open(&key_path).with_context(|| format!("failed to open {:?}", key_path))?))

@@ -17,7 +17,7 @@ data
 *.ipr
 *.iml
 
+# certificates
 *.crt
 *.key
 *.pem
-*.json

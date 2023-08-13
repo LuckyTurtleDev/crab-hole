@@ -1,6 +1,7 @@
 #![warn(rust_2018_idioms, unreachable_pub)]
 #![forbid(elided_lifetimes_in_paths, unsafe_code)]
-#![feature(test)]
+#![cfg_attr(all(test, nightly), feature(test))]
+#[cfg(all(test, nightly))]
 extern crate test;
 
 mod api;

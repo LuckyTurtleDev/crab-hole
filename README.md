@@ -49,8 +49,18 @@ Example config file using cloudflare as dot (dns-over-tls) upstream.
 [blocklist]
 include_subdomains = true
 lists = [
-	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts"
+	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts",
+	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt"
 ]
+
+# optional
+[api]
+port = 8080
+listen = "127.0.0.1"
+# optional (default = false)
+show_doc = true # OpenAPI doc loads content from third party websites
+# optional
+admin_key = "1234"
 
 [[downstream]]
 protocol = "udp"
@@ -61,6 +71,35 @@ port = 8080
 protocol = "udp"
 listen = "[::]" #all ipv6 and ipv4 adress
 port = 8053
+
+[[downstream]]
+protocol = "tls"
+listen = "[::]"
+port = 8054
+certificate = "dns.example.com.crt"
+key = "dns.example.com.key"
+# optional (default = 3000)
+timeout_ms = 3000
+
+[[downstream]]
+protocol = "https"
+listen = "[::]"
+port = 8055
+certificate = "dns.example.com.crt"
+key = "dns.example.com.key"
+dns_hostname = "dns.example.com"
+# optional (default = 3000)
+timeout_ms = 3000
+
+[[downstream]]
+protocol = "quic"
+listen = "127.0.0.1"
+port = 8055
+certificate = "dns.example.com.crt"
+key = "dns.example.com.key"
+dns_hostname = "dns.example.com"
+# optional (default = 3000)
+timeout_ms = 3000
 
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1111]:853"

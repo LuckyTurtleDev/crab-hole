@@ -206,20 +206,24 @@ async fn load_cert_and_key(
 	})
 	.collect();
 	if certificates.is_empty() {
-		bail!(format!("x509 certificate found in {:?}", cert_path));
+		bail!(format!("no x509 certificate found in {:?}", cert_path));
 	}
-	let key =
-		rustls_pemfile::read_all(&mut BufReader::new(File::open(&key_path).with_context(|| format!("failed to open {:?}", key_path))?))
-			.with_context(|| format!("failed to parse {:?}", key_path))?
-			.iter()
-			.find_map(|item| match item {
-				rustls_pemfile::Item::ECKey(key) => Some(key),
-				rustls_pemfile::Item::RSAKey(key) => Some(key),
-				rustls_pemfile::Item::PKCS8Key(key) => Some(key),
-				_ => None
-			})
-			.map(|key| PrivateKey(key.to_owned()))
-			.ok_or_else(|| anyhow::Error::msg("no private key found in {key_path:?}\n expected RSA/PKCS8 DER-encoded plaintext or Sec1-encoded plaintext ECKey"))?;
+	let key = rustls_pemfile::read_all(&mut BufReader::new(
+		File::open(&key_path)
+			.with_context(|| format!("failed to open {:?}", key_path))?
+	))
+	.with_context(|| format!("failed to parse {:?}", key_path))?
+	.iter()
+	.find_map(|item| match item {
+		rustls_pemfile::Item::ECKey(key) => Some(key),
+		rustls_pemfile::Item::RSAKey(key) => Some(key),
+		rustls_pemfile::Item::PKCS8Key(key) => Some(key),
+		_ => None
+	})
+	.map(|key| PrivateKey(key.to_owned()))
+	.ok_or_else(|| {
+		anyhow::Error::msg("no private RSA/PKCS8/ECKey key found in {key_path:?}")
+	})?;
 	Ok((certificates, key))
 }
 

@@ -95,6 +95,8 @@ impl Trie {
 #[cfg(test)]
 mod tests {
 	use super::Trie;
+	use test::Bencher;
+	use trust_dns_proto::rr::domain;
 
 	#[test]
 	fn simple() {
@@ -123,5 +125,24 @@ mod tests {
 
 		assert!(tree.contains("foo.example.com", true));
 		assert!(!tree.contains("foo.example.com", false));
+	}
+
+	#[bench]
+	fn create_trie(b: &mut Bencher) {
+		let mut trie = Trie::new();
+		let ram_list = include_str!("../bench/domains.txt");
+		let list = crate::parser::Blocklist::parse("../bench/domains.txt", ram_list)
+			.ok()
+			.unwrap();
+		let domains: Vec<String> = list
+			.entries
+			.iter()
+			.map(|line| line.domain().0.clone())
+			.collect();
+		b.iter(|| {
+			for domain in &domains {
+				trie.insert(domain);
+			}
+		});
 	}
 }

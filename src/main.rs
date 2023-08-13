@@ -1,5 +1,7 @@
 #![warn(rust_2018_idioms, unreachable_pub)]
 #![forbid(elided_lifetimes_in_paths, unsafe_code)]
+#![feature(test)]
+extern crate test;
 
 mod api;
 mod parser;

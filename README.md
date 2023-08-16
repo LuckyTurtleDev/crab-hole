@@ -6,10 +6,10 @@
 [![AUR package](https://repology.org/badge/version-for-repo/aur/crab-hole.svg)](https://aur.archlinux.org/packages/crab-hole)
 
 Crab-hole is a cross platform Pi-hole clone written in rust using [trust-dns](https://github.com/bluejekyll/trust-dns).
-It can be use as network wide Ad and spy blocker or just run it on your local pc.
+It can be use as a network wide Ad and spy blocker or run on your local pc.
 
-For a secure and private communication carb-hole has buildin support for doh(https), doq(quic), dot(tls) and dnssec for upstreams.
-And does also come with private friendly default logging settings.
+For a secure and private communication carb-hole has buildin support for doh(https), doq(quic) and dot(tls) for down- and upstreams and dnssec for upstreams.
+It does also come with private friendly default logging settings.
 
 # Installation: 
 Crab-hole is avaibale at the following repositories:

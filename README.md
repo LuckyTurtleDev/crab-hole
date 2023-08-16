@@ -6,10 +6,10 @@
 [![AUR package](https://repology.org/badge/version-for-repo/aur/crab-hole.svg)](https://aur.archlinux.org/packages/crab-hole)
 
 Crab-hole is a cross platform Pi-hole clone written in rust using [trust-dns](https://github.com/bluejekyll/trust-dns).
-It can be use as network wide Ad and spy blocker or just run it on your local pc.
+It can be use as a network wide Ad and spy blocker or run on your local pc.
 
-For a secure and private communication carb-hole has buildin support for doh(https), doq(quic), dot(tls) and dnssec for upstreams.
-And does also come with private friendly default logging settings.
+For a secure and private communication carb-hole has buildin support for doh(https), doq(quic) and dot(tls) for down- and upstreams and dnssec for upstreams.
+It does also come with private friendly default logging settings.
 
 # Installation: 
 Crab-hole is avaibale at the following repositories:
@@ -49,8 +49,18 @@ Example config file using cloudflare as dot (dns-over-tls) upstream.
 [blocklist]
 include_subdomains = true
 lists = [
-	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts"
+	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts",
+	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt"
 ]
+
+# optional
+[api]
+port = 8080
+listen = "127.0.0.1"
+# optional (default = false)
+show_doc = true # OpenAPI doc loads content from third party websites
+# optional
+admin_key = "1234"
 
 [[downstream]]
 protocol = "udp"
@@ -61,6 +71,35 @@ port = 8080
 protocol = "udp"
 listen = "[::]" #all ipv6 and ipv4 adress
 port = 8053
+
+[[downstream]]
+protocol = "tls"
+listen = "[::]"
+port = 8054
+certificate = "dns.example.com.crt"
+key = "dns.example.com.key"
+# optional (default = 3000)
+timeout_ms = 3000
+
+[[downstream]]
+protocol = "https"
+listen = "[::]"
+port = 8055
+certificate = "dns.example.com.crt"
+key = "dns.example.com.key"
+dns_hostname = "dns.example.com"
+# optional (default = 3000)
+timeout_ms = 3000
+
+[[downstream]]
+protocol = "quic"
+listen = "127.0.0.1"
+port = 8055
+certificate = "dns.example.com.crt"
+key = "dns.example.com.key"
+dns_hostname = "dns.example.com"
+# optional (default = 3000)
+timeout_ms = 3000
 
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1111]:853"

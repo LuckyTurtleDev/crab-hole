@@ -16,3 +16,8 @@ data
 /.idea/
 *.ipr
 *.iml
+
+# certificates
+*.crt
+*.key
+*.pem

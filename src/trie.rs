@@ -128,13 +128,13 @@ mod tests {
 	#[cfg(nightly)]
 	mod bench {
 		use super::*;
-		use test::Bencher;
 		use std::fs;
+		use test::Bencher;
 
 		#[bench]
 		fn create_trie(b: &mut Bencher) {
 			let mut trie = Trie::new();
-			let path = concat!(env!("CARGO_MANIFEST_DIR"),"/bench/domains.txt");
+			let path = concat!(env!("CARGO_MANIFEST_DIR"), "/bench/domains.txt");
 			let raw_list = fs::read_to_string(path).unwrap();
 			let list = crate::parser::Blocklist::parse(path, &raw_list)
 				.ok()

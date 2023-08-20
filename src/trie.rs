@@ -129,14 +129,17 @@ mod tests {
 	mod bench {
 		use super::*;
 		use test::Bencher;
+		use std::fs;
 
 		#[bench]
 		fn create_trie(b: &mut Bencher) {
 			let mut trie = Trie::new();
-			let ram_list = include_str!("../bench/domains.txt");
-			let list = crate::parser::Blocklist::parse("../bench/domains.txt", ram_list)
+			let path = concat!(env!("CARGO_MANIFEST_DIR"),"/bench/domains.txt");
+			let raw_list = fs::read_to_string(path).unwrap();
+			let list = crate::parser::Blocklist::parse(path, &raw_list)
 				.ok()
 				.unwrap();
+			drop(raw_list);
 			let domains: Vec<String> = list
 				.entries
 				.iter()

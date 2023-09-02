@@ -387,7 +387,7 @@ struct HttpsAndQuicConfig {
 	key: PathBuf,
 	#[serde(default = "default_timeout")]
 	timeout_ms: u64,
-	dns_hostname: String
+	dns_hostname: Option<String>
 }
 
 fn main() {

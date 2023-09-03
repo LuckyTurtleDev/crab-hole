@@ -285,6 +285,7 @@ dependencies = [
  "basic-toml",
  "chumsky",
  "directories",
+ "iai",
  "indoc",
  "log",
  "my-env-logger-style",
@@ -788,6 +789,14 @@ dependencies = [
  "rustls",
  "tokio",
  "tokio-rustls",
+]
+
+[[package]]
+name = "iai"
+version = "0.1.1"
+source = "git+https://github.com/sigaloid/iai?rev=d56a597#d56a5971f6d5556cd9e9b92e7e0f753c9ce9cdc7"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]

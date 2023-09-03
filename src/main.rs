@@ -7,16 +7,19 @@ extern crate test;
 mod api;
 mod parser;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use async_trait::async_trait;
 use directories::ProjectDirs;
 use log::{debug, info};
 use once_cell::sync::Lazy;
 use reqwest::Client;
+use rustls::{Certificate, PrivateKey};
 use serde::Deserialize;
 use std::{
 	env::var,
-	fs, iter,
+	fs::{self, File},
+	io::BufReader,
+	iter,
 	path::PathBuf,
 	sync::{
 		atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -25,7 +28,11 @@ use std::{
 	time::Duration
 };
 use time::OffsetDateTime;
-use tokio::{net::UdpSocket, time::sleep, try_join};
+use tokio::{
+	net::{TcpListener, UdpSocket},
+	time::sleep,
+	try_join
+};
 use trust_dns_proto::{
 	op::{header::Header, response_code::ResponseCode},
 	rr::Name
@@ -186,6 +193,43 @@ impl RequestHandler for Handler {
 	}
 }
 
+async fn load_cert_and_key(
+	cert_path: PathBuf,
+	key_path: PathBuf
+) -> anyhow::Result<(Vec<Certificate>, PrivateKey)> {
+	let certificates: Vec<_> = rustls_pemfile::read_all(&mut BufReader::new(
+		File::open(&cert_path)
+			.with_context(|| format!("failed to open {:?}", cert_path))?
+	))
+	.with_context(|| format!("failed to parse {:?}", cert_path))?
+	.iter()
+	.filter_map(|cert| match cert {
+		rustls_pemfile::Item::X509Certificate(cert) => Some(Certificate(cert.to_owned())),
+		_ => None
+	})
+	.collect();
+	if certificates.is_empty() {
+		bail!(format!("no x509 certificate found in {:?}", cert_path));
+	}
+	let key = rustls_pemfile::read_all(&mut BufReader::new(
+		File::open(&key_path)
+			.with_context(|| format!("failed to open {:?}", key_path))?
+	))
+	.with_context(|| format!("failed to parse {:?}", key_path))?
+	.iter()
+	.find_map(|item| match item {
+		rustls_pemfile::Item::ECKey(key) => Some(key),
+		rustls_pemfile::Item::RSAKey(key) => Some(key),
+		rustls_pemfile::Item::PKCS8Key(key) => Some(key),
+		_ => None
+	})
+	.map(|key| PrivateKey(key.to_owned()))
+	.ok_or_else(|| {
+		anyhow::Error::msg("no private RSA/PKCS8/ECKey key found in {key_path:?}")
+	})?;
+	Ok((certificates, key))
+}
+
 #[tokio::main]
 async fn async_main(config: Config) {
 	let stats = Stats::default();
@@ -203,6 +247,62 @@ async fn async_main(config: Config) {
 					.with_context(|| format!("failed to bind udp socket {}", socket_addr))
 					.unwrap_or_else(|err| panic!("{err:?}"));
 				server.register_socket(udp_socket);
+			},
+			DownstreamConfig::Tls(downstream) => {
+				let cert_and_key =
+					load_cert_and_key(downstream.certificate, downstream.key)
+						.await
+						.expect("failed to load certificate or private key");
+				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
+				let tcp_listener = TcpListener::bind(&socket_addr)
+					.await
+					.with_context(|| format!("failed to bind tcp socket {}", socket_addr))
+					.unwrap_or_else(|err| panic!("{err:?}"));
+				server
+					.register_tls_listener(
+						tcp_listener,
+						Duration::from_millis(downstream.timeout_ms),
+						cert_and_key
+					)
+					.expect("failed to register tls downstream")
+			},
+			DownstreamConfig::Https(downstream) => {
+				let cert_and_key =
+					load_cert_and_key(downstream.certificate, downstream.key)
+						.await
+						.expect("failed to load certificate or private key");
+				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
+				let tcp_listener = TcpListener::bind(&socket_addr)
+					.await
+					.with_context(|| format!("failed to bind tcp socket {}", socket_addr))
+					.unwrap_or_else(|err| panic!("{err:?}"));
+				server
+					.register_https_listener(
+						tcp_listener,
+						Duration::from_millis(downstream.timeout_ms),
+						cert_and_key,
+						downstream.dns_hostname
+					)
+					.expect("failed to register tls downstream")
+			},
+			DownstreamConfig::Quic(downstream) => {
+				let cert_and_key =
+					load_cert_and_key(downstream.certificate, downstream.key)
+						.await
+						.expect("failed to load certificate or private key");
+				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
+				let udp_socket = UdpSocket::bind(&socket_addr)
+					.await
+					.with_context(|| format!("failed to bind tcp socket {}", socket_addr))
+					.unwrap_or_else(|err| panic!("{err:?}"));
+				server
+					.register_quic_listener(
+						udp_socket,
+						Duration::from_millis(downstream.timeout_ms),
+						cert_and_key,
+						downstream.dns_hostname
+					)
+					.expect("failed to register tls downstream")
 			}
 		}
 	}
@@ -253,7 +353,14 @@ struct BlockConfig {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "lowercase", tag = "protocol")]
 enum DownstreamConfig {
-	Udp(UdpConfig)
+	Udp(UdpConfig),
+	Tls(TlsConfig),
+	Https(HttpsAndQuicConfig),
+	Quic(HttpsAndQuicConfig)
+}
+
+fn default_timeout() -> u64 {
+	3000
 }
 
 #[derive(Debug, Deserialize)]
@@ -261,6 +368,29 @@ enum DownstreamConfig {
 struct UdpConfig {
 	port: u16,
 	listen: String
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TlsConfig {
+	port: u16,
+	listen: String,
+	certificate: PathBuf,
+	key: PathBuf,
+	#[serde(default = "default_timeout")]
+	timeout_ms: u64
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HttpsAndQuicConfig {
+	port: u16,
+	listen: String,
+	certificate: PathBuf,
+	key: PathBuf,
+	#[serde(default = "default_timeout")]
+	timeout_ms: u64,
+	dns_hostname: Option<String>
 }
 
 fn main() {

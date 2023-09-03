@@ -127,7 +127,7 @@ mod tests {
 	#[cfg(nightly)]
 	mod bench {
 		use super::*;
-		use std::fs;
+		use std::{collections::HashSet, fs};
 		use test::Bencher;
 
 		#[bench]
@@ -147,6 +147,33 @@ mod tests {
 			b.iter(|| {
 				for domain in &domains {
 					trie.insert(domain);
+				}
+			});
+		}
+
+		#[bench]
+		fn trie_contains(b: &mut Bencher) {
+			let mut trie = Trie::new();
+			let path = concat!(env!("CARGO_MANIFEST_DIR"), "/bench/domains.txt");
+			let raw_list = fs::read_to_string(path).unwrap();
+			let list = crate::parser::Blocklist::parse(path, &raw_list)
+				.ok()
+				.unwrap();
+			drop(raw_list);
+			let domains: Vec<String> = list
+				.entries
+				.iter()
+				.map(|line| line.domain().0.clone())
+				.collect();
+			for domain in &domains {
+				trie.insert(domain);
+			}
+			let domains: HashSet<String> = domains.into_iter().collect();
+			b.iter(|| {
+				for domain in &domains {
+					if !trie.contains(domain, false) {
+						panic!("this domain should be insert")
+					};
 				}
 			});
 		}

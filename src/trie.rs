@@ -3,7 +3,7 @@ use std::{collections::HashMap as Map, iter::Rev};
 #[derive(Default)]
 struct Node {
 	is_in: bool,
-	childs: Map<String, Node,>
+	childs: Map<String, Node>
 }
 
 impl Node {

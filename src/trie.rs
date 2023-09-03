@@ -1,39 +1,38 @@
-use nohash_hasher::BuildNoHashHasher;
 use std::{collections::HashMap as Map, iter::Rev};
 
 #[derive(Default)]
 struct Node {
 	is_in: bool,
-	childs: Map<u8, Node, BuildNoHashHasher<u8>>
+	childs: Map<String, Node,>
 }
 
 impl Node {
-	fn insert(&mut self, iter: &mut Rev<std::str::Bytes<'_>>) {
+	fn insert<'a>(&mut self, mut iter: impl Iterator<Item = &'a str>) {
 		match iter.next() {
 			None => self.is_in = true,
-			Some(ch) => match self.childs.get_mut(&ch) {
+			Some(domain_part) => match self.childs.get_mut(domain_part) {
 				Some(child) => child.insert(iter),
 				None => {
 					let mut child = Node::default();
 					child.insert(iter);
-					self.childs.insert(ch, child);
+					self.childs.insert(domain_part.to_owned(), child);
 				}
 			}
 		}
 	}
 
-	fn contains(
+	fn contains<'a>(
 		&self,
-		iter: &mut Rev<std::str::Bytes<'_>>,
+		mut iter: impl Iterator<Item = &'a str>,
 		include_subdomains: bool
 	) -> bool {
 		match iter.next() {
 			None => self.is_in,
-			Some(ch) => {
-				if include_subdomains && self.is_in && (ch == b'.') {
+			Some(domain_part) => {
+				if include_subdomains && self.is_in {
 					return true;
 				}
-				match self.childs.get(&ch) {
+				match self.childs.get(domain_part) {
 					None => false,
 					Some(child) => child.contains(iter, include_subdomains)
 				}
@@ -69,15 +68,15 @@ impl Trie {
 	}
 
 	pub(crate) fn insert(&mut self, domain: &str) {
-		let mut iter = domain.bytes().rev();
-		if iter.len() == 0 {
+		if domain.is_empty() {
 			return;
 		}
+		let mut iter = domain.split('.').rev();
 		self.root.insert(&mut iter);
 	}
 
 	pub(crate) fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
-		let mut iter = domain.bytes().rev();
+		let mut iter = domain.split('.').rev();
 		self.root.contains(&mut iter, include_subdomains)
 	}
 

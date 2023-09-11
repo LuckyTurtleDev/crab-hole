@@ -1,10 +1,10 @@
 use nohash_hasher::BuildNoHashHasher;
-use std::{collections::HashMap as Map, iter::Rev};
+use std::{collections::HashMap, iter::Rev};
 
 #[derive(Default)]
 struct Node {
 	is_in: bool,
-	childs: Map<u8, Node, BuildNoHashHasher<u8>>
+	childs: HashMap<u8, Node, BuildNoHashHasher<u8>>
 }
 
 impl Node {

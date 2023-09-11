@@ -794,7 +794,7 @@ dependencies = [
 [[package]]
 name = "iai"
 version = "0.1.1"
-source = "git+https://github.com/sigaloid/iai?rev=d56a597#d56a5971f6d5556cd9e9b92e7e0f753c9ce9cdc7"
+source = "git+https://github.com/bheisler/iai?rev=c19e72306bef1a8a53305a926524e710a937eba0#c19e72306bef1a8a53305a926524e710a937eba0"
 dependencies = [
  "cfg-if",
 ]

@@ -169,7 +169,7 @@ mod tests {
 			for domain in &domains {
 				trie.insert(domain);
 			}
-			let domains: HashSet<String> = domains.into_iter().collect();
+			let domains: HashSet<String> = domains.into_iter().take(1000).collect();
 			b.iter(|| {
 				for domain in &domains {
 					if !trie.contains(domain, false) {

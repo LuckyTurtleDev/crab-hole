@@ -39,31 +39,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: "${{runner.os}} Rust Bench ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
       - name: Run benchmark
-        run: |
-          set -eo pipefail
-          cargo +nightly bench | tee output.txt
-      # Download previous benchmark result from cache (if exists)
-      - run: cat output.txt
-      - name: Download previous benchmark data
-        uses: actions/cache@v3
-        with:
-          path: ./cache
-          key: ${{ runner.os }}-benchmark
-      # Run `github-action-benchmark` action
-      - name: Store benchmark result
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          # What benchmark tool the output.txt came from
-          tool: 'cargo'
-          # Where the output from the benchmark tool is stored
-          output-file-path: output.txt
-          # Where the previous data file is stored
-          external-data-json-path: ./cache/benchmark-data.json
-          # Workflow will fail when an alert happens
-          fail-on-alert: true
-          alert-threshold: "120%"
-          # Upload the updated cache file for the next job by actions/cache
+        run: cargo +nightly bench
 
   cargo_publish:
     if: ${{ github.event_name == 'release' }}

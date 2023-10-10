@@ -294,6 +294,7 @@ dependencies = [
  "poem",
  "poem-openapi",
  "reqwest",
+ "rustc_version",
  "rustls",
  "rustls-pemfile",
  "serde",

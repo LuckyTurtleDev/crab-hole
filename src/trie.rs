@@ -22,7 +22,6 @@ impl Trie {
 			let mut domain = domain.bytes().rev();
 			let mut sub_trie = self.0.subtrie(&Vec::new());
 			while !sub_trie.is_empty() {
-				key.clear();
 				for byte in &mut domain {
 					if byte == b'.' {
 						break;
@@ -33,6 +32,8 @@ impl Trie {
 				if sub_trie.get(Vec::new()).is_some() {
 					return true;
 				}
+				key.clear();
+				key.push(b'.');
 			}
 			false
 		} else {

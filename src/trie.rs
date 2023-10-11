@@ -131,20 +131,23 @@ mod tests {
 		use std::{collections::HashSet, fs};
 		use test::Bencher;
 
-		#[bench]
-		fn create_trie(b: &mut Bencher) {
-			let mut trie = Trie::new();
-			let path = concat!(env!("CARGO_MANIFEST_DIR"), "/bench/domains.txt");
-			let raw_list = fs::read_to_string(path).unwrap();
-			let list = crate::parser::Blocklist::parse(path, &raw_list)
+		fn load_domains(path: &str) -> Vec<String> {
+			let path = format!("{}/{}", env!("CARGO_MANIFEST_DIR"), path);
+			let raw_list = fs::read_to_string(&path).unwrap();
+			let list = crate::parser::Blocklist::parse(&path, &raw_list)
 				.ok()
 				.unwrap();
 			drop(raw_list);
-			let domains: Vec<String> = list
-				.entries
+			list.entries
 				.iter()
 				.map(|line| line.domain().0.clone())
-				.collect();
+				.collect()
+		}
+
+		#[bench]
+		fn create_trie(b: &mut Bencher) {
+			let domains = load_domains("/bench/domains.txt");
+			let mut trie = Trie::new();
 			b.iter(|| {
 				for domain in &domains {
 					trie.insert(domain);
@@ -154,27 +157,33 @@ mod tests {
 
 		#[bench]
 		fn trie_contains(b: &mut Bencher) {
+			let domains = load_domains("/bench/domains.txt");
 			let mut trie = Trie::new();
-			let path = concat!(env!("CARGO_MANIFEST_DIR"), "/bench/domains.txt");
-			let raw_list = fs::read_to_string(path).unwrap();
-			let list = crate::parser::Blocklist::parse(path, &raw_list)
-				.ok()
-				.unwrap();
-			drop(raw_list);
-			let domains: Vec<String> = list
-				.entries
-				.iter()
-				.map(|line| line.domain().0.clone())
-				.collect();
 			for domain in &domains {
 				trie.insert(domain);
 			}
 			let domains: HashSet<String> = domains.into_iter().take(1000).collect();
 			b.iter(|| {
 				for domain in &domains {
-					if !trie.contains(domain, false) {
+					if !trie.contains(domain, true) {
 						panic!("this domain should be insert")
 					};
+				}
+			});
+		}
+
+		#[bench]
+		fn trie_miss(b: &mut Bencher) {
+			let domains = load_domains("/bench/domains.txt");
+			let mut trie = Trie::new();
+			for domain in &domains {
+				trie.insert(domain);
+			}
+			drop(domains);
+			let miss_domanis = load_domains("/bench/ missing-domains.txt");
+			b.iter(|| {
+				for domain in &miss_domanis {
+					trie.contains(domain, true);
 				}
 			});
 		}

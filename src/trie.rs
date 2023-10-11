@@ -1,94 +1,50 @@
-use nohash_hasher::BuildNoHashHasher;
-use std::{collections::HashMap, iter::Rev};
+use qp_trie::Trie as QTrie;
 
 #[derive(Default)]
-struct Node {
-	is_in: bool,
-	childs: HashMap<u8, Node, BuildNoHashHasher<u8>>
-}
-
-impl Node {
-	fn insert(&mut self, iter: &mut Rev<std::str::Bytes<'_>>) {
-		match iter.next() {
-			None => self.is_in = true,
-			Some(ch) => match self.childs.get_mut(&ch) {
-				Some(child) => child.insert(iter),
-				None => {
-					let mut child = Node::default();
-					child.insert(iter);
-					self.childs.insert(ch, child);
-				}
-			}
-		}
-	}
-
-	fn contains(
-		&self,
-		iter: &mut Rev<std::str::Bytes<'_>>,
-		include_subdomains: bool
-	) -> bool {
-		match iter.next() {
-			None => self.is_in,
-			Some(ch) => {
-				if include_subdomains && self.is_in && (ch == b'.') {
-					return true;
-				}
-				match self.childs.get(&ch) {
-					None => false,
-					Some(child) => child.contains(iter, include_subdomains)
-				}
-			}
-		}
-	}
-
-	fn shrink_to_fit(&mut self) {
-		self.childs.shrink_to_fit();
-		for (_, child) in self.childs.iter_mut() {
-			child.shrink_to_fit();
-		}
-	}
-
-	fn len(&self, len: &mut usize) {
-		if self.is_in {
-			*len += 1;
-		}
-		for (_, child) in &self.childs {
-			child.len(len);
-		}
-	}
-}
-
-#[derive(Default)]
-pub(crate) struct Trie {
-	root: Node
-}
+pub(crate) struct Trie(QTrie<Vec<u8>, ()>);
 
 impl Trie {
 	pub(crate) fn new() -> Self {
-		Trie::default()
+		Self(QTrie::new())
 	}
 
 	pub(crate) fn insert(&mut self, domain: &str) {
-		let mut iter = domain.bytes().rev();
-		if iter.len() == 0 {
+		if domain.is_empty() {
 			return;
 		}
-		self.root.insert(&mut iter);
+		let key = domain.bytes().rev().collect();
+		self.0.insert(key, ());
 	}
 
 	pub(crate) fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
-		let mut iter = domain.bytes().rev();
-		self.root.contains(&mut iter, include_subdomains)
+		if include_subdomains {
+			let mut key = Vec::new();
+			let mut domain = domain.bytes().rev();
+			let mut sub_trie = self.0.subtrie(&Vec::new());
+			while !sub_trie.is_empty() {
+				key.clear();
+				for byte in &mut domain {
+					if byte == b'.' {
+						break;
+					}
+					key.push(byte);
+				}
+				sub_trie = sub_trie.subtrie(&*key);
+				if sub_trie.get(Vec::new()).is_some() {
+					return true;
+				}
+			}
+			false
+		} else {
+			let key: Vec<u8> = domain.bytes().rev().collect();
+			self.0.get(&key).is_some()
+		}
 	}
 
-	pub(crate) fn shrink_to_fit(&mut self) {
-		self.root.shrink_to_fit();
-	}
+	pub(crate) fn shrink_to_fit(&mut self) {}
 
 	pub(crate) fn len(&self) -> usize {
-		let mut len: usize = 0;
-		self.root.len(&mut len);
-		len
+		self.0.count()
 	}
 }
 

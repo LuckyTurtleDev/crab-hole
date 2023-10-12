@@ -19,10 +19,10 @@ impl Trie {
 	}
 
 	pub(crate) fn insert(&mut self, domain: &str) {
-		if domain.is_empty() {
+		if domain.is_empty() || self.contains(domain, false) {
 			return;
 		}
-		assert!(!self.contains(domain, false));
+
 		let rev = rev(domain);
 		self.cedar.update(&rev, 1);
 		self.len += 1;

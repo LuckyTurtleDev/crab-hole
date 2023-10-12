@@ -44,6 +44,8 @@ url = { version = "2.3.1", features = ["serde"] }
 
 [dev-dependencies]
 indoc = "2.0.1"
+jemallocator = "0.5"
+jemalloc-sys = { version = "0.5", features = ["stats"] }
 
 [build-dependencies]
 rustc_version = "0.4.0"

@@ -1,94 +1,51 @@
-use nohash_hasher::BuildNoHashHasher;
-use std::{collections::HashMap, iter::Rev};
+use cedarwood::Cedar;
+use std::iter;
 
-#[derive(Default)]
-struct Node {
-	is_in: bool,
-	childs: HashMap<u8, Node, BuildNoHashHasher<u8>>
-}
-
-impl Node {
-	fn insert(&mut self, iter: &mut Rev<std::str::Bytes<'_>>) {
-		match iter.next() {
-			None => self.is_in = true,
-			Some(ch) => match self.childs.get_mut(&ch) {
-				Some(child) => child.insert(iter),
-				None => {
-					let mut child = Node::default();
-					child.insert(iter);
-					self.childs.insert(ch, child);
-				}
-			}
-		}
-	}
-
-	fn contains(
-		&self,
-		iter: &mut Rev<std::str::Bytes<'_>>,
-		include_subdomains: bool
-	) -> bool {
-		match iter.next() {
-			None => self.is_in,
-			Some(ch) => {
-				if include_subdomains && self.is_in && (ch == b'.') {
-					return true;
-				}
-				match self.childs.get(&ch) {
-					None => false,
-					Some(child) => child.contains(iter, include_subdomains)
-				}
-			}
-		}
-	}
-
-	fn shrink_to_fit(&mut self) {
-		self.childs.shrink_to_fit();
-		for (_, child) in self.childs.iter_mut() {
-			child.shrink_to_fit();
-		}
-	}
-
-	fn len(&self, len: &mut usize) {
-		if self.is_in {
-			*len += 1;
-		}
-		for (_, child) in &self.childs {
-			child.len(len);
-		}
-	}
-}
-
-#[derive(Default)]
 pub(crate) struct Trie {
-	root: Node
+	cedar: Cedar,
+	len: usize
+}
+
+fn rev(domain: &str) -> String {
+	domain.chars().rev().chain(iter::once('.')).collect()
 }
 
 impl Trie {
 	pub(crate) fn new() -> Self {
-		Trie::default()
+		Self {
+			cedar: Cedar::new(),
+			len: 0
+		}
 	}
 
 	pub(crate) fn insert(&mut self, domain: &str) {
-		let mut iter = domain.bytes().rev();
-		if iter.len() == 0 {
+		if domain.is_empty() {
 			return;
 		}
-		self.root.insert(&mut iter);
+		assert!(!self.contains(domain, false));
+		let rev = rev(domain);
+		self.cedar.update(&rev, 1);
+		self.len += 1;
 	}
 
 	pub(crate) fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
-		let mut iter = domain.bytes().rev();
-		self.root.contains(&mut iter, include_subdomains)
+		let rev = rev(domain);
+		if include_subdomains {
+			for (_, prefix_len) in self.cedar.common_prefix_iter(&rev) {
+				if &rev[prefix_len ..= prefix_len] == "." || prefix_len == rev.len() {
+					return true;
+				}
+			}
+			false
+		} else {
+			self.cedar.exact_match_search(&rev).is_some()
+		}
 	}
 
-	pub(crate) fn shrink_to_fit(&mut self) {
-		self.root.shrink_to_fit();
-	}
+	pub(crate) fn shrink_to_fit(&mut self) {}
 
 	pub(crate) fn len(&self) -> usize {
-		let mut len: usize = 0;
-		self.root.len(&mut len);
-		len
+		self.len
 	}
 }
 

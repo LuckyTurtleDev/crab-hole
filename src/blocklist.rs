@@ -15,14 +15,15 @@ use tokio::{
 };
 use url::Url;
 
-#[derive(Default)]
 pub(crate) struct BlockList {
 	trie: RwLock<Trie>
 }
 
 impl BlockList {
 	pub(crate) fn new() -> Self {
-		BlockList::default()
+		Self {
+			trie: RwLock::new(Trie::new())
+		}
 	}
 
 	///Clear and update the current Blocklist, to all entries of the list at from `adlist`.

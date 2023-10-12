@@ -109,8 +109,33 @@ mod tests {
 	#[cfg(nightly)]
 	mod bench {
 		use super::*;
-		use std::{collections::HashSet, fs};
+		use std::{
+			collections::HashSet,
+			ffi::{c_char, c_void},
+			fs,
+			io::{self, Write as _},
+			ptr::{null, null_mut}
+		};
 		use test::Bencher;
+
+		/// https://stackoverflow.com/a/30983834/3755692
+		extern "C" fn write_cb(_: *mut c_void, message: *const c_char) {
+			write!(
+				io::stderr(),
+				"{}",
+				String::from_utf8_lossy(unsafe {
+					std::ffi::CStr::from_ptr(message as *const i8).to_bytes()
+				})
+			)
+			.unwrap();
+		}
+
+		/// https://stackoverflow.com/a/30983834/3755692
+		fn mem_print() {
+			unsafe {
+				jemalloc_sys::malloc_stats_print(Some(write_cb), null_mut(), null())
+			}
+		}
 
 		fn load_domains(path: &str) -> Vec<String> {
 			let path = format!("{}/{}", env!("CARGO_MANIFEST_DIR"), path);
@@ -161,6 +186,7 @@ mod tests {
 				trie.insert(domain);
 			}
 			drop(domains);
+			mem_print();
 			let miss_domanis = load_domains("/bench/missing-domains.txt");
 			b.iter(|| {
 				for domain in &miss_domanis {

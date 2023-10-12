@@ -1,8 +1,14 @@
 #![warn(rust_2018_idioms, unreachable_pub)]
-#![forbid(elided_lifetimes_in_paths, unsafe_code)]
+#![forbid(elided_lifetimes_in_paths)]
+#![cfg_attr(not(all(test, nightly)), forbid(unsafe_code))]
 #![cfg_attr(all(test, nightly), feature(test))]
+
 #[cfg(all(test, nightly))]
 extern crate test;
+
+#[cfg(all(test, nightly))]
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 mod api;
 mod parser;

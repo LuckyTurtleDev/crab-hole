@@ -137,7 +137,7 @@ mod tests {
 				trie.insert(domain);
 			}
 			drop(domains);
-			let miss_domanis = load_domains("/bench/ missing-domains.txt");
+			let miss_domanis = load_domains("/bench/missing-domains.txt");
 			b.iter(|| {
 				for domain in &miss_domanis {
 					trie.contains(domain, true);

@@ -51,10 +51,9 @@ impl Trie {
 					key.push(byte);
 				}
 				sub_trie = sub_trie.subtrie(&*key);
-				if sub_trie.get(Vec::new()).is_some() {
+				if sub_trie.get(&*key).is_some() {
 					return true;
 				}
-				key.clear();
 				key.push(b'.');
 			}
 			false

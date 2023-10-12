@@ -1,7 +1,29 @@
 use qp_trie::Trie as QTrie;
+use std::fmt::{self, Debug, Formatter};
 
 #[derive(Default)]
 pub(crate) struct Trie(QTrie<Vec<u8>, ()>);
+
+impl Debug for Trie {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		struct TrieDebug<'a>(&'a Trie);
+
+		impl Debug for TrieDebug<'_> {
+			fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+				f.debug_list()
+					.entries(
+						self.0
+							 .0
+							.iter()
+							.map(|(bytes, _)| String::from_utf8_lossy(bytes))
+					)
+					.finish()
+			}
+		}
+
+		f.debug_tuple("Trie").field(&TrieDebug(self)).finish()
+	}
+}
 
 impl Trie {
 	pub(crate) fn new() -> Self {
@@ -69,13 +91,16 @@ mod tests {
 	#[test]
 	fn sub_domain() {
 		let mut tree = Trie::new();
+		dbg!(&tree);
 		assert!(!tree.contains("example.com", true));
 		tree.insert("example.com");
+		dbg!(&tree);
 		assert!(tree.contains("example.com", true));
 		assert!(!tree.contains("xample.com", true));
 		assert!(!tree.contains("example.co", true));
 		assert!(!tree.contains("eexample.com", true));
 		tree.insert("eexample.com");
+		dbg!(&tree);
 		assert!(tree.contains("eexample.com", true));
 
 		assert!(tree.contains("foo.example.com", true));

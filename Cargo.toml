@@ -14,6 +14,10 @@ include = [
   "config.toml"
 ]
 
+[features]
+# internal debugging feature for the parser
+__debug_parser = []
+
 [dependencies]
 anyhow = "1.0.70"
 ariadne = "0.3"

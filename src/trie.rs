@@ -1,9 +1,9 @@
-use std::{collections::HashMap, iter::Rev};
+use std::collections::HashMap;
 
 #[derive(Default)]
 struct Node {
 	is_in: bool,
-	childs: Map<String, Node>
+	childs: HashMap<String, Node>
 }
 
 impl Node {
@@ -51,7 +51,7 @@ impl Node {
 		if self.is_in {
 			*len += 1;
 		}
-		for (_, child) in &self.childs {
+		for child in self.childs.values() {
 			child.len(len);
 		}
 	}

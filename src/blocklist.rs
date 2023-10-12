@@ -47,36 +47,11 @@ impl BlockList {
 		let mut trie = Trie::new();
 
 		for url in adlist {
-			let mut path = url.path().to_owned().replace('/', "-");
-			if !path.is_empty() {
-				path.remove(0);
-			}
-			if let Some(query) = url.query() {
-				path += "--";
-				path += query;
-			}
-			let path = PathBuf::from(&*LIST_DIR).join(path);
-			let raw_list = if !path.exists() || !restore_from_cache {
-				info!("downloading {url}");
-				let resp: anyhow::Result<String> = (|| async {
-					//try block
-					let resp = CLIENT
-						.get(url.to_owned())
-						.send()
-						.await?
-						.error_for_status()?
-						.text()
-						.await?;
-					if let Err(err) = write(&path, &resp)
-						.await
-						.with_context(|| format!("failed to save to {path:?}"))
-					{
-						error!("{err:?}");
-					}
-					Ok(resp)
-				})()
-				.await;
-				match resp.with_context(|| format!("error downloading {url}")) {
+			let raw_list = if url.scheme() == "file" {
+				let path = &url.path()[1 ..];
+				info!("load file {path:?}");
+				let raw_list = read_to_string(&path).await;
+				match raw_list.with_context(|| format!("can not open file {path:?}")) {
 					Ok(value) => Some(value),
 					Err(err) => {
 						error!("{err:?}");
@@ -84,27 +59,65 @@ impl BlockList {
 					}
 				}
 			} else {
-				None
-			};
-			let raw_list = match raw_list {
-				Some(value) => Some(value),
-				None => {
-					if path.exists() {
-						info!("restore from cache {url}");
-						match read_to_string(&path)
+				let mut path = url.path().to_owned().replace('/', "-");
+				if !path.is_empty() {
+					path.remove(0);
+				}
+				if let Some(query) = url.query() {
+					path += "--";
+					path += query;
+				}
+				let path = PathBuf::from(&*LIST_DIR).join(path);
+				let raw_list = if !path.exists() || !restore_from_cache {
+					info!("downloading {url}");
+					let resp: anyhow::Result<String> = (|| async {
+						//try block
+						let resp = CLIENT
+							.get(url.to_owned())
+							.send()
+							.await?
+							.error_for_status()?
+							.text()
+							.await?;
+						if let Err(err) = write(&path, &resp)
 							.await
-							.with_context(|| format!("error reading file {path:?}"))
+							.with_context(|| format!("failed to save to {path:?}"))
 						{
-							Ok(value) => Some(value),
-							Err(err) => {
-								error!("{err:?}");
-								None
-							}
+							error!("{err:?}");
 						}
-					} else {
-						None
+						Ok(resp)
+					})()
+					.await;
+					match resp.with_context(|| format!("error downloading {url}")) {
+						Ok(value) => Some(value),
+						Err(err) => {
+							error!("{err:?}");
+							None
+						}
 					}
-				},
+				} else {
+					None
+				};
+				match raw_list {
+					Some(value) => Some(value),
+					None => {
+						if path.exists() {
+							info!("restore from cache {url}");
+							match read_to_string(&path)
+								.await
+								.with_context(|| format!("error reading file {path:?}"))
+							{
+								Ok(value) => Some(value),
+								Err(err) => {
+									error!("{err:?}");
+									None
+								}
+							}
+						} else {
+							None
+						}
+					},
+				}
 			};
 			match raw_list {
 				None => error!("skipp list {url}"),

@@ -48,7 +48,7 @@ impl BlockList {
 
 		for url in adlist {
 			let raw_list = if url.scheme() == "file" {
-				let path = &url.path()[1 ..];
+				let path = url.path();
 				info!("load file {path:?}");
 				let raw_list = read_to_string(&path).await;
 				match raw_list.with_context(|| format!("can not open file {path:?}")) {

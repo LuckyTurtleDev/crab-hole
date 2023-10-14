@@ -5,7 +5,7 @@
 [![Packaging status](https://repology.org/badge/tiny-repos/crab-hole.svg)](https://repology.org/project/crab-hole/versions) 
 [![AUR package](https://repology.org/badge/version-for-repo/aur/crab-hole.svg)](https://aur.archlinux.org/packages/crab-hole)
 
-Crab-hole is a cross platform Pi-hole clone written in rust using [trust-dns](https://github.com/bluejekyll/trust-dns).
+Crab-hole is a cross platform Pi-hole clone written in rust using [hickory-dns/trust-dns](https://github.com/hickory-dns/hickory-dns).
 It can be use as a network wide Ad and spy blocker or run on your local pc.
 
 For a secure and private communication carb-hole has buildin support for doh(https), doq(quic) and dot(tls) for down- and upstreams and dnssec for upstreams.
@@ -50,7 +50,8 @@ Example config file using cloudflare as dot (dns-over-tls) upstream.
 include_subdomains = true
 lists = [
 	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts",
-	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt"
+	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt",
+	"file:///blocked.txt"
 ]
 
 # optional

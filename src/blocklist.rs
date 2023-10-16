@@ -15,9 +15,21 @@ use tokio::{
 };
 use url::Url;
 
+pub(crate) struct ListInfo {
+	/// count of domains inside this List
+	count: u64,
+	url: String
+}
+
+#[derive(Default)]
+pub(crate) struct InnerBlockList {
+	trie: Trie,
+	list_info: Vec<ListInfo>,
+}
+
 #[derive(Default)]
 pub(crate) struct BlockList {
-	trie: RwLock<Trie>
+	rw_lock: RwLock<InnerBlockList>
 }
 
 impl BlockList {
@@ -45,6 +57,7 @@ impl BlockList {
 			error!("{err:?}");
 		}
 		let mut trie = Trie::new();
+		let mut list_info = Vec::new();
 
 		for url in adlist {
 			let raw_list = if url.scheme() == "file" {
@@ -129,9 +142,14 @@ impl BlockList {
 							err.print();
 						},
 						Ok(list) => {
+							let mut count = 0;
 							for entry in list.entries {
-								trie.insert(&entry.domain().0);
+								if !trie.insert(&entry.domain().0, list_info.len()) {
+									// domain was not already add by this list
+									count += 1;
+								}
 							}
+							list_info.push(ListInfo { count, url: url.as_str().to_owned() });
 						},
 					}
 				}
@@ -148,13 +166,14 @@ impl BlockList {
 		if blocked_count == 0 {
 			warn!("Blocklist is empty");
 		}
-		let mut guard = self.trie.write().await;
-		*guard = trie;
+		let mut guard = self.rw_lock.write().await;
+		guard.trie = trie;
+		guard.list_info = list_info;
 		drop(guard);
 		info!("👮✅ finish updating blocklist");
 	}
 
 	pub(crate) async fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
-		self.trie.read().await.contains(domain, include_subdomains)
+		self.rw_lock.read().await.trie.contains(domain, include_subdomains)
 	}
 }

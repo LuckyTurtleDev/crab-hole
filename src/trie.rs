@@ -1,8 +1,11 @@
+use bit_vec::BitVec;
 use qp_trie::Trie as QTrie;
-use std::fmt::{self, Debug, Formatter};
+use std::{
+	fmt::{self, Debug, Formatter}
+};
 
 #[derive(Default)]
-pub(crate) struct Trie(QTrie<Vec<u8>, ()>);
+pub(crate) struct Trie(QTrie<Vec<u8>, BitVec>);
 
 impl Debug for Trie {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -30,12 +33,27 @@ impl Trie {
 		Self(QTrie::new())
 	}
 
-	pub(crate) fn insert(&mut self, domain: &str) {
+	/// add domain to trie, and return true if the domain was already added by the **same** list.
+	pub(crate) fn insert(&mut self, domain: &str, list_info_index: usize) -> bool{
+		let mut was_already_add_by_this_list = false;
 		if domain.is_empty() {
-			return;
+			return was_already_add_by_this_list;
 		}
-		let key = domain.bytes().rev().collect();
-		self.0.insert(key, ());
+		let key: Vec<u8> = domain.bytes().rev().collect();
+		let mut index = BitVec::from_elem(list_info_index +1, false);
+		index.set(list_info_index, true);
+		let old_value = self.0.insert(key.clone(), index);
+		if let Some(mut old_value) = old_value {
+			// if value already exist, we need to add the entry to the existing bitvec
+			was_already_add_by_this_list = old_value.get(list_info_index).is_some_and(|f| f);
+			if list_info_index + 1 > old_value.len() {
+				let grow = list_info_index + 1 - old_value.len();
+				old_value.grow(grow, false);
+				old_value.set(list_info_index, true);
+			}
+			self.0.insert(key, old_value);
+		};
+		was_already_add_by_this_list
 	}
 
 	pub(crate) fn contains(&self, domain: &str, include_subdomains: bool) -> bool {

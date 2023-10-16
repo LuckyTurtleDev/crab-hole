@@ -5,26 +5,26 @@
 [![Packaging status](https://repology.org/badge/tiny-repos/crab-hole.svg)](https://repology.org/project/crab-hole/versions) 
 [![AUR package](https://repology.org/badge/version-for-repo/aur/crab-hole.svg)](https://aur.archlinux.org/packages/crab-hole)
 
-Crab-hole is a cross platform Pi-hole clone written in rust using [hickory-dns/trust-dns](https://github.com/hickory-dns/hickory-dns).
+Crab-hole is a cross platform Pi-hole clone written in Rust using [hickory-dns/trust-dns](https://github.com/hickory-dns/hickory-dns).
 It can be use as a network wide Ad and spy blocker or run on your local pc.
 
-For a secure and private communication carb-hole has buildin support for doh(https), doq(quic) and dot(tls) for down- and upstreams and dnssec for upstreams.
-~~It does also come with private friendly default logging settings.~~ see https://github.com/LuckyTurtleDev/crab-hole/issues/15
+For a secure and private communication, crab-hole has builtin support for doh(https), doq(quic) and dot(tls) for down- and upstreams and dnssec for upstreams.
+~~It also comes with privacy friendly default logging settings.~~ see https://github.com/LuckyTurtleDev/crab-hole/issues/15
 
 # Installation: 
-Crab-hole is avaibale at the following repositories:
+Crab-hole is available at the following repositories:
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/crab-hole.svg)](https://repology.org/project/crab-hole/versions)
 
-Prebuild binarys can also been downloaded from the [Github release](https://github.com/LuckyTurtleDev/crab-hole/releases/latest).
+Prebuilt binaries can also been downloaded from the [Github release](https://github.com/LuckyTurtleDev/crab-hole/releases/latest).
 
 
 ### Building from source: 
-Alternative you can easily build crab-hole by yourself.
-* [install rust](https://www.rust-lang.org/tools/install)
-* run `cargo install crab-hole --locked`.
-See the [rust book](https://doc.rust-lang.org/cargo/commands/cargo-install.html) for more information about cargo install.
-* make sure that `~/.cargo/bin` is listed at the `PATH` enviroment variable
+Alternatively you can easily build crab-hole by yourself.
+* [Install Rust](https://www.rust-lang.org/tools/install)
+* Run `cargo install crab-hole --locked`
+See the [Rust book](https://doc.rust-lang.org/cargo/commands/cargo-install.html) for more information about cargo install.
+* Make sure that `~/.cargo/bin` is listed in the `PATH` environment variable
 
 ### Docker
 A docker image is available at the Github Container Registry.

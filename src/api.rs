@@ -13,7 +13,10 @@ use std::sync::{
 };
 use time::OffsetDateTime;
 
-use crate::{CARGO_PKG_NAME, CARGO_PKG_VERSION};
+use crate::{
+	blocklist::BlockList,
+	CARGO_PKG_NAME, CARGO_PKG_VERSION
+};
 
 #[derive(Debug, Deserialize, Object)]
 #[serde(deny_unknown_fields)]
@@ -73,11 +76,20 @@ struct Stats {
 	running_since: OffsetDateTime
 }
 
+#[derive(Debug, Object)]
+struct Querry {
+	/// url of the blocklist
+	name: String,
+	/// domain which was hitt
+	domain: String
+}
+
 struct Api {
 	doc_enable: bool,
 	stats: crate::Stats,
 	blocklist_len: Arc<AtomicUsize>,
-	key: Option<String>
+	key: Option<String>,
+	blocklist: Arc<BlockList>
 }
 
 #[OpenApi]
@@ -111,6 +123,23 @@ impl Api {
 	}
 
 	/// private statistics
+	#[oai(path = "/querry.json", method = "get")]
+	async fn querry(&self, key: Key, domain: String) -> poem::Result<Json<Vec<Querry>>> {
+		key.validate(self)?;
+		let lists: Vec<_> = self
+			.blocklist
+			.query(&domain)
+			.await
+			.into_iter()
+			.map(|(list, pos)| Querry {
+				name: list.url,
+				domain: domain[pos ..].to_owned()
+			})
+			.collect();
+		Ok(Json(lists))
+	}
+
+	/// private statistics
 	#[oai(path = "/all_stats.json", method = "get")]
 	async fn all_stats(&self, key: Key) -> poem::Result<Json<Stats>> {
 		key.validate(self)?;
@@ -140,11 +169,13 @@ impl Api {
 pub(crate) async fn init(
 	config: Option<Config>,
 	stats: crate::Stats,
+	blocklist: Arc<BlockList>,
 	blocklist_len: Arc<AtomicUsize>
 ) -> anyhow::Result<()> {
 	if let Some(config) = config {
 		let address = format!("{}:{}", config.listen, config.port);
 		let api_data = Api {
+			blocklist,
 			doc_enable: config.show_doc,
 			stats,
 			blocklist_len,

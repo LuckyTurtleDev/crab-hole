@@ -4,7 +4,6 @@ use std::{
 	fmt::{self, Debug, Formatter},
 	iter
 };
-use trust_dns_proto::rr::domain;
 
 #[derive(Default)]
 pub(crate) struct Trie(QTrie<Vec<u8>, BitVec>);
@@ -89,10 +88,9 @@ impl Trie {
 		}
 	}
 
-	pub(crate) fn query(&self, domain: &str) -> BitVec {
+	pub(crate) fn query(&self, domain: &str) -> Vec<(&BitVec, usize)> {
 		// not the fasted way, but it does not slow down the `contains` function
 		// and has no dublicated code
-		let union_index = BitVec::new();
 		let pos_iter =
 			iter::once(0).chain(domain.bytes().enumerate().filter_map(|(i, byte)| {
 				if byte == b'.' {
@@ -101,23 +99,13 @@ impl Trie {
 					None
 				}
 			}));
+		let mut hits = Vec::new();
 		for pos in pos_iter {
-			let subdomain = &domain[pos ..];
 			if let Some(index) = self.contains(domain, false) {
-				if union_index.len() < index.len() {
-					union_index.grow(index.len() - union_index.len(), false)
-				}
-				if index.len() < union_index.len() {
-					index
-						.to_owned()
-						.grow(union_index.len() - index.len(), false);
-					union_index.or(index);
-				} else {
-					union_index.or(index);
-				}
+				hits.push((index, pos));
 			}
 		}
-		union_index
+		hits
 	}
 
 	pub(crate) fn shrink_to_fit(&mut self) {}

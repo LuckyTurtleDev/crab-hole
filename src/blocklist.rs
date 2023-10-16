@@ -15,19 +15,20 @@ use tokio::{
 };
 use url::Url;
 
+#[derive(Clone, Debug)]
 pub(crate) struct ListInfo {
 	/// count of domains inside this List
-	count: u64,
-	url: String
+	pub(crate) count: u64,
+	pub(crate) url: String
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(crate) struct InnerBlockList {
 	trie: Trie,
 	list_info: Vec<ListInfo>
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(crate) struct BlockList {
 	rw_lock: RwLock<InnerBlockList>
 }
@@ -182,5 +183,20 @@ impl BlockList {
 			.await
 			.trie
 			.contains(domain, include_subdomains)
+			.is_some()
+	}
+
+	pub(crate) async fn query(&self, domain: &str) -> Vec<(ListInfo, usize)> {
+		let guard = self.rw_lock.read().await;
+		let mut hits = Vec::new();
+		for (index, pos) in guard.trie.query(domain).iter() {
+			for (i, is_in) in index.iter().enumerate() {
+				if is_in {
+					let list_info = guard.list_info.get(i).unwrap();
+					hits.push((list_info.to_owned(), pos.to_owned()))
+				}
+			}
+		}
+		hits
 	}
 }

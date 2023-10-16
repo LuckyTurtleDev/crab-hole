@@ -313,8 +313,9 @@ async fn async_main(config: Config) {
 		}
 	}
 	let blocklist_len_move = blocklist_len.clone();
+	let blocklist_move = blocklist.clone();
 	tokio::spawn(async move {
-		let blocklist = blocklist;
+		let blocklist = blocklist_move;
 		let lists = config.blocklist.lists;
 		loop {
 			blocklist
@@ -332,7 +333,7 @@ async fn async_main(config: Config) {
 				.with_context(|| "failed to start dns server")
 		},
 		async {
-			api::init(config.api, stats, blocklist_len.clone())
+			api::init(config.api, stats, blocklist , blocklist_len.clone())
 				.await
 				.with_context(|| "failed to start api/web server")
 		}

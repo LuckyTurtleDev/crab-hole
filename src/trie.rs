@@ -1,8 +1,10 @@
 use bit_vec::BitVec;
 use qp_trie::Trie as QTrie;
 use std::{
-	fmt::{self, Debug, Formatter}
+	fmt::{self, Debug, Formatter},
+	iter
 };
+use trust_dns_proto::rr::domain;
 
 #[derive(Default)]
 pub(crate) struct Trie(QTrie<Vec<u8>, BitVec>);
@@ -34,18 +36,19 @@ impl Trie {
 	}
 
 	/// add domain to trie, and return true if the domain was already added by the **same** list.
-	pub(crate) fn insert(&mut self, domain: &str, list_info_index: usize) -> bool{
+	pub(crate) fn insert(&mut self, domain: &str, list_info_index: usize) -> bool {
 		let mut was_already_add_by_this_list = false;
 		if domain.is_empty() {
 			return was_already_add_by_this_list;
 		}
 		let key: Vec<u8> = domain.bytes().rev().collect();
-		let mut index = BitVec::from_elem(list_info_index +1, false);
+		let mut index = BitVec::from_elem(list_info_index + 1, false);
 		index.set(list_info_index, true);
 		let old_value = self.0.insert(key.clone(), index);
 		if let Some(mut old_value) = old_value {
 			// if value already exist, we need to add the entry to the existing bitvec
-			was_already_add_by_this_list = old_value.get(list_info_index).is_some_and(|f| f);
+			was_already_add_by_this_list =
+				old_value.get(list_info_index).is_some_and(|f| f);
 			if list_info_index + 1 > old_value.len() {
 				let grow = list_info_index + 1 - old_value.len();
 				old_value.grow(grow, false);
@@ -56,7 +59,11 @@ impl Trie {
 		was_already_add_by_this_list
 	}
 
-	pub(crate) fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
+	pub(crate) fn contains(
+		&self,
+		domain: &str,
+		include_subdomains: bool
+	) -> Option<&BitVec> {
 		if include_subdomains {
 			let mut key = Vec::new();
 			let mut domain = domain.bytes().rev();
@@ -69,16 +76,48 @@ impl Trie {
 					key.push(byte);
 				}
 				sub_trie = sub_trie.subtrie(&*key);
-				if sub_trie.get(&*key).is_some() {
-					return true;
+				let index = sub_trie.get(&*key);
+				if index.is_some() {
+					return index;
 				}
 				key.push(b'.');
 			}
-			false
+			None
 		} else {
 			let key: Vec<u8> = domain.bytes().rev().collect();
-			self.0.get(&key).is_some()
+			self.0.get(&key)
 		}
+	}
+
+	pub(crate) fn query(&self, domain: &str) -> BitVec {
+		// not the fasted way, but it does not slow down the `contains` function
+		// and has no dublicated code
+		let union_index = BitVec::new();
+		let pos_iter =
+			iter::once(0).chain(domain.bytes().enumerate().filter_map(|(i, byte)| {
+				if byte == b'.' {
+					Some(i)
+				} else {
+					None
+				}
+			}));
+		for pos in pos_iter {
+			let subdomain = &domain[pos ..];
+			if let Some(index) = self.contains(domain, false) {
+				if union_index.len() < index.len() {
+					union_index.grow(index.len() - union_index.len(), false)
+				}
+				if index.len() < union_index.len() {
+					index
+						.to_owned()
+						.grow(union_index.len() - index.len(), false);
+					union_index.or(index);
+				} else {
+					union_index.or(index);
+				}
+			}
+		}
+		union_index
 	}
 
 	pub(crate) fn shrink_to_fit(&mut self) {}

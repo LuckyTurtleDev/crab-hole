@@ -24,7 +24,7 @@ pub(crate) struct ListInfo {
 #[derive(Default)]
 pub(crate) struct InnerBlockList {
 	trie: Trie,
-	list_info: Vec<ListInfo>,
+	list_info: Vec<ListInfo>
 }
 
 #[derive(Default)]
@@ -149,8 +149,11 @@ impl BlockList {
 									count += 1;
 								}
 							}
-							list_info.push(ListInfo { count, url: url.as_str().to_owned() });
-						},
+							list_info.push(ListInfo {
+								count,
+								url: url.as_str().to_owned()
+							});
+						}
 					}
 				}
 			}
@@ -174,6 +177,10 @@ impl BlockList {
 	}
 
 	pub(crate) async fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
-		self.rw_lock.read().await.trie.contains(domain, include_subdomains)
+		self.rw_lock
+			.read()
+			.await
+			.trie
+			.contains(domain, include_subdomains)
 	}
 }

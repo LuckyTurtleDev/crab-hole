@@ -99,7 +99,7 @@ impl Trie {
 		let pos_iter =
 			iter::once(0).chain(domain.bytes().enumerate().filter_map(|(i, byte)| {
 				if byte == b'.' {
-					Some(i + 1) // +1 does not panic, if `.` is the laste element
+					Some(i + 1) // +1 does not panic, if `.` is the last element
 				} else {
 					None
 				}

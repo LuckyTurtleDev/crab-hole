@@ -117,38 +117,38 @@ impl Trie {
 
 #[cfg(test)]
 mod tests {
-	use super::Trie;
+	use super::*;
 
 	#[test]
 	fn simple() {
 		let mut tree = Trie::new();
-		assert!(!tree.contains("example.com", false));
-		tree.insert("example.com");
-		assert!(tree.contains("example.com", false));
-		assert!(!tree.contains("xample.com", false));
-		assert!(!tree.contains("example.co", false));
-		assert!(!tree.contains("eexample.com", false));
-		tree.insert("eexample.com");
-		assert!(tree.contains("eexample.com", false));
+		assert!(tree.contains("example.com", false).is_none());
+		tree.insert("example.com", 0);
+		assert!(tree.contains("example.com", false).is_some());
+		assert!(tree.contains("xample.com", false).is_none());
+		assert!(tree.contains("example.co", false).is_none());
+		assert!(tree.contains("eexample.com", false).is_none());
+		tree.insert("eexample.com", 0);
+		assert!(tree.contains("eexample.com", false).is_some());
 	}
 
 	#[test]
 	fn sub_domain() {
 		let mut tree = Trie::new();
 		dbg!(&tree);
-		assert!(!tree.contains("example.com", true));
-		tree.insert("example.com");
+		assert!(tree.contains("example.com", true).is_none());
+		tree.insert("example.com", 0);
 		dbg!(&tree);
-		assert!(tree.contains("example.com", true));
-		assert!(!tree.contains("xample.com", true));
-		assert!(!tree.contains("example.co", true));
-		assert!(!tree.contains("eexample.com", true));
-		tree.insert("eexample.com");
+		assert!(tree.contains("example.com", true).is_some());
+		assert!(tree.contains("xample.com", true).is_none());
+		assert!(tree.contains("example.co", true).is_none());
+		assert!(tree.contains("eexample.com", true).is_none());
+		tree.insert("eexample.com", 0);
 		dbg!(&tree);
-		assert!(tree.contains("eexample.com", true));
+		assert!(tree.contains("eexample.com", true).is_some());
 
-		assert!(tree.contains("foo.example.com", true));
-		assert!(!tree.contains("foo.example.com", false));
+		assert!(tree.contains("foo.example.com", true).is_some());
+		assert!(tree.contains("foo.example.com", false).is_none());
 	}
 
 	#[cfg(nightly)]

@@ -206,7 +206,7 @@ mod tests {
 			let mut trie = Trie::new();
 			b.iter(|| {
 				for domain in &domains {
-					trie.insert(domain);
+					trie.insert(domain, 0);
 				}
 			});
 		}
@@ -221,7 +221,7 @@ mod tests {
 			let domains: HashSet<String> = domains.into_iter().take(1000).collect();
 			b.iter(|| {
 				for domain in &domains {
-					if !trie.find(domain, true) {
+					if trie.find(domain, true).is_none() {
 						panic!("this domain should be insert")
 					};
 				}

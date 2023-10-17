@@ -216,7 +216,7 @@ mod tests {
 			let domains = load_domains("/bench/domains.txt");
 			let mut trie = Trie::new();
 			for domain in &domains {
-				trie.insert(domain);
+				trie.insert(domain, 0);
 			}
 			let domains: HashSet<String> = domains.into_iter().take(1000).collect();
 			b.iter(|| {
@@ -233,7 +233,7 @@ mod tests {
 			let domains = load_domains("/bench/domains.txt");
 			let mut trie = Trie::new();
 			for domain in &domains {
-				trie.insert(domain);
+				trie.insert(domain, 0);
 			}
 			drop(domains);
 			mem_print();

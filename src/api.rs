@@ -79,10 +79,12 @@ struct Stats {
 
 #[derive(Debug, Object)]
 struct BlockInfo {
-	/// url of the blocklist
-	name: String,
-	/// domain which was hitt
-	domain: String
+	/// url of the blocklist, which blocks the domain
+	list: String,
+	/// domain which is blocked and match the qurry domain
+	domain: String,
+	/// indicate if the query domain is a subdomain from a blocked domain
+	subdomain: bool
 }
 
 struct Api {
@@ -138,8 +140,9 @@ impl Api {
 			.await
 			.into_iter()
 			.map(|(list, pos)| BlockInfo {
-				name: list.url,
-				domain: domain[pos ..].to_owned()
+				list: list.url,
+				domain: domain[pos ..].to_owned(),
+				subdomain: pos != 0
 			})
 			.collect();
 		Ok(Json(lists))

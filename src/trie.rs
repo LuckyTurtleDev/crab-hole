@@ -1,8 +1,12 @@
+use bit_vec::BitVec;
 use qp_trie::Trie as QTrie;
-use std::fmt::{self, Debug, Formatter};
+use std::{
+	fmt::{self, Debug, Formatter},
+	iter
+};
 
 #[derive(Default)]
-pub(crate) struct Trie(QTrie<Vec<u8>, ()>);
+pub(crate) struct Trie(QTrie<Vec<u8>, BitVec>);
 
 impl Debug for Trie {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -30,15 +34,40 @@ impl Trie {
 		Self(QTrie::new())
 	}
 
-	pub(crate) fn insert(&mut self, domain: &str) {
+	/// Add a domain to this trie. If the domain is not already in the trie, it will
+	/// be added with the list marked as its single source and returns true. If the
+	/// domain is already in the trie but was not marked as coming from the list, it
+	/// will be marked as coming from the list as well and returns true. If the
+	/// domain is already in the trie and is marked as coming from the list, it will
+	/// return false.
+	pub(crate) fn insert(&mut self, domain: &str, list_info_index: usize) -> bool {
+		let mut was_already_add_by_this_list = false;
 		if domain.is_empty() {
-			return;
+			return was_already_add_by_this_list;
 		}
-		let key = domain.bytes().rev().collect();
-		self.0.insert(key, ());
+		let key: Vec<u8> = domain.bytes().rev().collect();
+		let mut index = BitVec::from_elem(list_info_index + 1, false);
+		index.set(list_info_index, true);
+		let old_value = self.0.insert(key.clone(), index);
+		if let Some(mut old_value) = old_value {
+			// if value already exist, we need to add the entry to the existing bitvec
+			was_already_add_by_this_list =
+				old_value.get(list_info_index).is_some_and(|f| f);
+			if list_info_index + 1 > old_value.len() {
+				let grow = list_info_index + 1 - old_value.len();
+				old_value.grow(grow, false);
+				old_value.set(list_info_index, true);
+			}
+			self.0.insert(key, old_value);
+		};
+		was_already_add_by_this_list
 	}
 
-	pub(crate) fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
+	/// Search for a domain in this trie. Returns `None` if domain was not found in the
+	/// trie. Otherwise it returns a reference to a [`BitVec`], where the position of
+	/// `true`s in [`BitVec`] are the indices of those lists in `BlockList.list_info`
+	/// that contain the domain.
+	pub(crate) fn find(&self, domain: &str, include_subdomains: bool) -> Option<&BitVec> {
 		if include_subdomains {
 			let mut key = Vec::new();
 			let mut domain = domain.bytes().rev();
@@ -51,16 +80,37 @@ impl Trie {
 					key.push(byte);
 				}
 				sub_trie = sub_trie.subtrie(&*key);
-				if sub_trie.get(&*key).is_some() {
-					return true;
+				let index = sub_trie.get(&*key);
+				if index.is_some() {
+					return index;
 				}
 				key.push(b'.');
 			}
-			false
+			None
 		} else {
 			let key: Vec<u8> = domain.bytes().rev().collect();
-			self.0.get(&key).is_some()
+			self.0.get(&key)
 		}
+	}
+
+	pub(crate) fn query(&self, domain: &str) -> Vec<(&BitVec, usize)> {
+		// not the fasted way, but it does not slow down the `contains` function
+		// and has no duplicated code
+		let pos_iter =
+			iter::once(0).chain(domain.bytes().enumerate().filter_map(|(i, byte)| {
+				if byte == b'.' {
+					Some(i + 1) // +1 does not panic, if `.` is the last element
+				} else {
+					None
+				}
+			}));
+		let mut hits = Vec::new();
+		for pos in pos_iter {
+			if let Some(index) = self.find(&domain[pos ..], false) {
+				hits.push((index, pos));
+			}
+		}
+		hits
 	}
 
 	pub(crate) fn shrink_to_fit(&mut self) {}
@@ -72,38 +122,38 @@ impl Trie {
 
 #[cfg(test)]
 mod tests {
-	use super::Trie;
+	use super::*;
 
 	#[test]
 	fn simple() {
 		let mut tree = Trie::new();
-		assert!(!tree.contains("example.com", false));
-		tree.insert("example.com");
-		assert!(tree.contains("example.com", false));
-		assert!(!tree.contains("xample.com", false));
-		assert!(!tree.contains("example.co", false));
-		assert!(!tree.contains("eexample.com", false));
-		tree.insert("eexample.com");
-		assert!(tree.contains("eexample.com", false));
+		assert!(tree.find("example.com", false).is_none());
+		tree.insert("example.com", 0);
+		assert!(tree.find("example.com", false).is_some());
+		assert!(tree.find("xample.com", false).is_none());
+		assert!(tree.find("example.co", false).is_none());
+		assert!(tree.find("eexample.com", false).is_none());
+		tree.insert("eexample.com", 0);
+		assert!(tree.find("eexample.com", false).is_some());
 	}
 
 	#[test]
 	fn sub_domain() {
 		let mut tree = Trie::new();
 		dbg!(&tree);
-		assert!(!tree.contains("example.com", true));
-		tree.insert("example.com");
+		assert!(tree.find("example.com", true).is_none());
+		tree.insert("example.com", 0);
 		dbg!(&tree);
-		assert!(tree.contains("example.com", true));
-		assert!(!tree.contains("xample.com", true));
-		assert!(!tree.contains("example.co", true));
-		assert!(!tree.contains("eexample.com", true));
-		tree.insert("eexample.com");
+		assert!(tree.find("example.com", true).is_some());
+		assert!(tree.find("xample.com", true).is_none());
+		assert!(tree.find("example.co", true).is_none());
+		assert!(tree.find("eexample.com", true).is_none());
+		tree.insert("eexample.com", 0);
 		dbg!(&tree);
-		assert!(tree.contains("eexample.com", true));
+		assert!(tree.find("eexample.com", true).is_some());
 
-		assert!(tree.contains("foo.example.com", true));
-		assert!(!tree.contains("foo.example.com", false));
+		assert!(tree.find("foo.example.com", true).is_some());
+		assert!(tree.find("foo.example.com", false).is_none());
 	}
 
 	#[cfg(nightly)]
@@ -156,7 +206,7 @@ mod tests {
 			let mut trie = Trie::new();
 			b.iter(|| {
 				for domain in &domains {
-					trie.insert(domain);
+					trie.insert(domain, 0);
 				}
 			});
 		}
@@ -166,12 +216,12 @@ mod tests {
 			let domains = load_domains("/bench/domains.txt");
 			let mut trie = Trie::new();
 			for domain in &domains {
-				trie.insert(domain);
+				trie.insert(domain, 0);
 			}
 			let domains: HashSet<String> = domains.into_iter().take(1000).collect();
 			b.iter(|| {
 				for domain in &domains {
-					if !trie.contains(domain, true) {
+					if trie.find(domain, true).is_none() {
 						panic!("this domain should be insert")
 					};
 				}
@@ -183,14 +233,14 @@ mod tests {
 			let domains = load_domains("/bench/domains.txt");
 			let mut trie = Trie::new();
 			for domain in &domains {
-				trie.insert(domain);
+				trie.insert(domain, 0);
 			}
 			drop(domains);
 			mem_print();
 			let miss_domanis = load_domains("/bench/missing-domains.txt");
 			b.iter(|| {
 				for domain in &miss_domanis {
-					trie.contains(domain, true);
+					trie.find(domain, true);
 				}
 			});
 		}

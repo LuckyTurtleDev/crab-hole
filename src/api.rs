@@ -2,6 +2,7 @@ use log::info;
 use poem::{http::StatusCode, listener::TcpListener, Route, Server};
 use poem_openapi::{
 	auth::ApiKey,
+	param::Query,
 	payload::{Html, Json},
 	types::Example,
 	Object, OpenApi, OpenApiService, SecurityScheme
@@ -13,7 +14,10 @@ use std::sync::{
 };
 use time::OffsetDateTime;
 
-use crate::{CARGO_PKG_NAME, CARGO_PKG_VERSION};
+use crate::{
+	blocklist::{BlockList, ListInfo},
+	CARGO_PKG_NAME, CARGO_PKG_VERSION
+};
 
 #[derive(Debug, Deserialize, Object)]
 #[serde(deny_unknown_fields)]
@@ -73,11 +77,22 @@ struct Stats {
 	running_since: OffsetDateTime
 }
 
+#[derive(Debug, Object)]
+struct BlockInfo {
+	/// url of the blocklist, which blocks the domain
+	list: String,
+	/// domain which is blocked and match the qurry domain
+	domain: String,
+	/// indicate if the query domain is a subdomain from a blocked domain
+	subdomain: bool
+}
+
 struct Api {
 	doc_enable: bool,
 	stats: crate::Stats,
 	blocklist_len: Arc<AtomicUsize>,
-	key: Option<String>
+	key: Option<String>,
+	blocklist: Arc<BlockList>
 }
 
 #[OpenApi]
@@ -110,6 +125,36 @@ impl Api {
 		})
 	}
 
+	/// query a domain, to test if it is blocked.
+	/// Return all blocklists that contain this domain.
+	#[oai(path = "/query.json", method = "get")]
+	async fn query(
+		&self,
+		key: Key,
+		domain: Query<String>
+	) -> poem::Result<Json<Vec<BlockInfo>>> {
+		key.validate(self)?;
+		let lists: Vec<_> = self
+			.blocklist
+			.query(&domain)
+			.await
+			.into_iter()
+			.map(|(list, pos)| BlockInfo {
+				list: list.url,
+				domain: domain[pos ..].to_owned(),
+				subdomain: pos != 0
+			})
+			.collect();
+		Ok(Json(lists))
+	}
+
+	/// Return all blocklists.
+	#[oai(path = "/list.json", method = "get")]
+	async fn list(&self, key: Key) -> poem::Result<Json<Vec<ListInfo>>> {
+		key.validate(self)?;
+		Ok(Json(self.blocklist.list().await))
+	}
+
 	/// private statistics
 	#[oai(path = "/all_stats.json", method = "get")]
 	async fn all_stats(&self, key: Key) -> poem::Result<Json<Stats>> {
@@ -140,11 +185,13 @@ impl Api {
 pub(crate) async fn init(
 	config: Option<Config>,
 	stats: crate::Stats,
+	blocklist: Arc<BlockList>,
 	blocklist_len: Arc<AtomicUsize>
 ) -> anyhow::Result<()> {
 	if let Some(config) = config {
 		let address = format!("{}:{}", config.listen, config.port);
 		let api_data = Api {
+			blocklist,
 			doc_enable: config.show_doc,
 			stats,
 			blocklist_len,

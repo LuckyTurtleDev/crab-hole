@@ -15,9 +15,22 @@ use tokio::{
 };
 use url::Url;
 
-#[derive(Default)]
+#[derive(Clone, Debug, poem_openapi::Object)]
+pub(crate) struct ListInfo {
+	/// count of domains inside this List
+	pub(crate) blocked: u64,
+	pub(crate) url: String
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct InnerBlockList {
+	trie: Trie,
+	list_info: Vec<ListInfo>
+}
+
+#[derive(Debug, Default)]
 pub(crate) struct BlockList {
-	trie: RwLock<Trie>
+	rw_lock: RwLock<InnerBlockList>
 }
 
 impl BlockList {
@@ -45,6 +58,7 @@ impl BlockList {
 			error!("{err:?}");
 		}
 		let mut trie = Trie::new();
+		let mut list_info = Vec::new();
 
 		for url in adlist {
 			let raw_list = if url.scheme() == "file" {
@@ -129,10 +143,18 @@ impl BlockList {
 							err.print();
 						},
 						Ok(list) => {
+							let mut count = 0;
 							for entry in list.entries {
-								trie.insert(&entry.domain().0);
+								if !trie.insert(&entry.domain().0, list_info.len()) {
+									// domain was not already add by this list
+									count += 1;
+								}
 							}
-						},
+							list_info.push(ListInfo {
+								blocked: count,
+								url: url.as_str().to_owned()
+							});
+						}
 					}
 				}
 			}
@@ -148,13 +170,37 @@ impl BlockList {
 		if blocked_count == 0 {
 			warn!("Blocklist is empty");
 		}
-		let mut guard = self.trie.write().await;
-		*guard = trie;
+		let mut guard = self.rw_lock.write().await;
+		guard.trie = trie;
+		guard.list_info = list_info;
 		drop(guard);
 		info!("👮✅ finish updating blocklist");
 	}
 
 	pub(crate) async fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
-		self.trie.read().await.contains(domain, include_subdomains)
+		self.rw_lock
+			.read()
+			.await
+			.trie
+			.find(domain, include_subdomains)
+			.is_some()
+	}
+
+	pub(crate) async fn list<'a>(&self) -> Vec<ListInfo> {
+		self.rw_lock.read().await.list_info.to_owned()
+	}
+
+	pub(crate) async fn query(&self, domain: &str) -> Vec<(ListInfo, usize)> {
+		let guard = self.rw_lock.read().await;
+		let mut hits = Vec::new();
+		for (index, pos) in guard.trie.query(domain).iter() {
+			for (i, is_in) in index.iter().enumerate() {
+				if is_in {
+					let list_info = guard.list_info.get(i).unwrap();
+					hits.push((list_info.to_owned(), pos.to_owned()))
+				}
+			}
+		}
+		hits
 	}
 }

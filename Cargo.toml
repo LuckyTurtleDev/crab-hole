@@ -22,6 +22,7 @@ __debug_parser = []
 anyhow = "1.0.70"
 ariadne = "0.3"
 async-trait = "0.1"
+bit-vec = "0.6.3"
 chumsky = "0.9.2"
 directories = "5.0.0"
 log = "0.4.17"

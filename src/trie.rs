@@ -221,7 +221,7 @@ mod tests {
 			let domains: HashSet<String> = domains.into_iter().take(1000).collect();
 			b.iter(|| {
 				for domain in &domains {
-					if !trie.contains(domain, true) {
+					if !trie.find(domain, true) {
 						panic!("this domain should be insert")
 					};
 				}
@@ -240,7 +240,7 @@ mod tests {
 			let miss_domanis = load_domains("/bench/missing-domains.txt");
 			b.iter(|| {
 				for domain in &miss_domanis {
-					trie.contains(domain, true);
+					trie.find(domain, true);
 				}
 			});
 		}

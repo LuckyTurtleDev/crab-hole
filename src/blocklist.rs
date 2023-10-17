@@ -15,10 +15,10 @@ use tokio::{
 };
 use url::Url;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, poem_openapi::Object)]
 pub(crate) struct ListInfo {
 	/// count of domains inside this List
-	pub(crate) count: u64,
+	pub(crate) blocked: u64,
 	pub(crate) url: String
 }
 
@@ -151,7 +151,7 @@ impl BlockList {
 								}
 							}
 							list_info.push(ListInfo {
-								count,
+								blocked: count,
 								url: url.as_str().to_owned()
 							});
 						}
@@ -185,7 +185,12 @@ impl BlockList {
 			.contains(domain, include_subdomains)
 			.is_some()
 	}
-
+	
+	pub(crate) async fn list<'a> (&self) -> Vec<ListInfo>
+	{
+		self.rw_lock.read().await.list_info.to_owned()
+	}
+	
 	pub(crate) async fn query(&self, domain: &str) -> Vec<(ListInfo, usize)> {
 		let guard = self.rw_lock.read().await;
 		let mut hits = Vec::new();

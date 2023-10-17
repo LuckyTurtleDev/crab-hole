@@ -14,7 +14,7 @@ use std::sync::{
 use time::OffsetDateTime;
 
 use crate::{
-	blocklist::BlockList,
+	blocklist::{BlockList, ListInfo},
 	CARGO_PKG_NAME, CARGO_PKG_VERSION
 };
 
@@ -122,7 +122,8 @@ impl Api {
 		})
 	}
 
-	/// private statistics
+	/// querry a domain, to test if it is blocked.
+	/// Return all listt wich can block this domain
 	#[oai(path = "/querry.json", method = "get")]
 	async fn querry(&self, key: Key, domain: String) -> poem::Result<Json<Vec<Querry>>> {
 		key.validate(self)?;
@@ -137,6 +138,13 @@ impl Api {
 			})
 			.collect();
 		Ok(Json(lists))
+	}
+	
+	/// retun all block list
+	#[oai(path = "/list.json", method = "get")]
+	async fn list(&self, key: Key) -> poem::Result<Json<Vec<ListInfo>>> {
+		key.validate(self)?;
+		Ok(Json(self.blocklist.list().await))
 	}
 
 	/// private statistics

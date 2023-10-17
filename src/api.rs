@@ -148,7 +148,7 @@ impl Api {
 		Ok(Json(lists))
 	}
 
-	/// retun all block list
+	/// Return all blocklists.
 	#[oai(path = "/list.json", method = "get")]
 	async fn list(&self, key: Key) -> poem::Result<Json<Vec<ListInfo>>> {
 		key.validate(self)?;

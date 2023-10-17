@@ -1,6 +1,6 @@
 [package]
 name = "crab-hole"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 description = "Pi-Hole clone written in rust using hickory-dns/trust-dns"
 repository = "https://github.com/LuckyTurtleDev/crab-hole"
@@ -40,7 +40,8 @@ time = "0.3.25"
 tokio = { version = "1.27", features = ["fs", "parking_lot", "rt-multi-thread", "macros", "net", "signal"] }
 toml = { package = "basic-toml", version = "0.1" }
 trust-dns-proto = {  package = "hickory-proto", version = "0.24", default-features = false }
-trust-dns-server = { package = "hickory-server", version = "0.24", default-features = false,  features = ["dnssec-ring", "dns-over-rustls", "dns-over-https-rustls", "dns-over-quic"] }
+trust-dns-server = { package = "hickory-server", version = "0.24", default-features = false,  features = ["dnssec-ring", "dns-over-h3" ,"dns-over-rustls", "dns-over-https-rustls", "dns-over-quic"] }
+hickory-resolver = { version = "0.24.0", default-features = false, features = ["webpki-roots"] }
 url = { version = "2.3.1", features = ["serde"] }
 
 [dev-dependencies]

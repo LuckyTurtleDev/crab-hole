@@ -296,6 +296,7 @@ dependencies = [
  "chumsky",
  "directories",
  "hickory-proto",
+ "hickory-resolver",
  "hickory-server",
  "indoc",
  "jemalloc-sys",
@@ -700,6 +701,7 @@ dependencies = [
  "tokio-rustls",
  "tracing",
  "url",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -724,6 +726,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tracing",
+ "webpki-roots",
 ]
 
 [[package]]

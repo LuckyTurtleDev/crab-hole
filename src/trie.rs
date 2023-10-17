@@ -34,7 +34,12 @@ impl Trie {
 		Self(QTrie::new())
 	}
 
-	/// add domain to trie, and return true if the domain was already added by the **same** list.
+	/// Add a domain to this trie. If the domain is not already in the trie, it will
+	/// be added with the list marked as its single source and returns true. If the
+	/// domain is already in the trie but was not marked as coming from the list, it
+	/// will be marked as coming from the list as well and returns true. If the
+	/// domain is already in the trie and is marked as coming from the list, it will
+	/// return false.
 	pub(crate) fn insert(&mut self, domain: &str, list_info_index: usize) -> bool {
 		let mut was_already_add_by_this_list = false;
 		if domain.is_empty() {

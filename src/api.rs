@@ -125,10 +125,10 @@ impl Api {
 		})
 	}
 
-	/// querry a domain, to test if it is blocked.
-	/// Return all listt wich can block this domain
+	/// query a domain, to test if it is blocked.
+	/// Return all blocklists that contain this domain.
 	#[oai(path = "/query.json", method = "get")]
-	async fn querry(
+	async fn query(
 		&self,
 		key: Key,
 		domain: Query<String>

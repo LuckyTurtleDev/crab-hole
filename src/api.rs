@@ -2,6 +2,7 @@ use log::info;
 use poem::{http::StatusCode, listener::TcpListener, Route, Server};
 use poem_openapi::{
 	auth::ApiKey,
+	param::Query,
 	payload::{Html, Json},
 	types::Example,
 	Object, OpenApi, OpenApiService, SecurityScheme
@@ -77,7 +78,7 @@ struct Stats {
 }
 
 #[derive(Debug, Object)]
-struct Querry {
+struct BlockInfo {
 	/// url of the blocklist
 	name: String,
 	/// domain which was hitt
@@ -124,22 +125,26 @@ impl Api {
 
 	/// querry a domain, to test if it is blocked.
 	/// Return all listt wich can block this domain
-	#[oai(path = "/querry.json", method = "get")]
-	async fn querry(&self, key: Key, domain: String) -> poem::Result<Json<Vec<Querry>>> {
+	#[oai(path = "/query.json", method = "get")]
+	async fn querry(
+		&self,
+		key: Key,
+		domain: Query<String>
+	) -> poem::Result<Json<Vec<BlockInfo>>> {
 		key.validate(self)?;
 		let lists: Vec<_> = self
 			.blocklist
 			.query(&domain)
 			.await
 			.into_iter()
-			.map(|(list, pos)| Querry {
+			.map(|(list, pos)| BlockInfo {
 				name: list.url,
 				domain: domain[pos ..].to_owned()
 			})
 			.collect();
 		Ok(Json(lists))
 	}
-	
+
 	/// retun all block list
 	#[oai(path = "/list.json", method = "get")]
 	async fn list(&self, key: Key) -> poem::Result<Json<Vec<ListInfo>>> {

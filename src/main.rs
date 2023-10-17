@@ -333,7 +333,7 @@ async fn async_main(config: Config) {
 				.with_context(|| "failed to start dns server")
 		},
 		async {
-			api::init(config.api, stats, blocklist , blocklist_len.clone())
+			api::init(config.api, stats, blocklist, blocklist_len.clone())
 				.await
 				.with_context(|| "failed to start api/web server")
 		}

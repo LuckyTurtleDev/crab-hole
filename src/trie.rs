@@ -94,14 +94,14 @@ impl Trie {
 		let pos_iter =
 			iter::once(0).chain(domain.bytes().enumerate().filter_map(|(i, byte)| {
 				if byte == b'.' {
-					Some(i)
+					Some(i + 1) // +1 does not panic, if `.` is the laste element
 				} else {
 					None
 				}
 			}));
 		let mut hits = Vec::new();
 		for pos in pos_iter {
-			if let Some(index) = self.contains(domain, false) {
+			if let Some(index) = self.contains(&domain[pos ..], false) {
 				hits.push((index, pos));
 			}
 		}

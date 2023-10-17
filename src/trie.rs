@@ -63,11 +63,11 @@ impl Trie {
 		was_already_add_by_this_list
 	}
 
-	pub(crate) fn contains(
-		&self,
-		domain: &str,
-		include_subdomains: bool
-	) -> Option<&BitVec> {
+	/// Search for a domain in this trie. Returns `None` if domain was not found in the
+	/// trie. Otherwise it returns a reference to a [`BitVec`], where the position of
+	/// `true`s in [`BitVec`] are the indices of those lists in `BlockList.list_info`
+	/// that contain the domain.
+	pub(crate) fn find(&self, domain: &str, include_subdomains: bool) -> Option<&BitVec> {
 		if include_subdomains {
 			let mut key = Vec::new();
 			let mut domain = domain.bytes().rev();
@@ -106,7 +106,7 @@ impl Trie {
 			}));
 		let mut hits = Vec::new();
 		for pos in pos_iter {
-			if let Some(index) = self.contains(&domain[pos ..], false) {
+			if let Some(index) = self.find(&domain[pos ..], false) {
 				hits.push((index, pos));
 			}
 		}
@@ -127,33 +127,33 @@ mod tests {
 	#[test]
 	fn simple() {
 		let mut tree = Trie::new();
-		assert!(tree.contains("example.com", false).is_none());
+		assert!(tree.find("example.com", false).is_none());
 		tree.insert("example.com", 0);
-		assert!(tree.contains("example.com", false).is_some());
-		assert!(tree.contains("xample.com", false).is_none());
-		assert!(tree.contains("example.co", false).is_none());
-		assert!(tree.contains("eexample.com", false).is_none());
+		assert!(tree.find("example.com", false).is_some());
+		assert!(tree.find("xample.com", false).is_none());
+		assert!(tree.find("example.co", false).is_none());
+		assert!(tree.find("eexample.com", false).is_none());
 		tree.insert("eexample.com", 0);
-		assert!(tree.contains("eexample.com", false).is_some());
+		assert!(tree.find("eexample.com", false).is_some());
 	}
 
 	#[test]
 	fn sub_domain() {
 		let mut tree = Trie::new();
 		dbg!(&tree);
-		assert!(tree.contains("example.com", true).is_none());
+		assert!(tree.find("example.com", true).is_none());
 		tree.insert("example.com", 0);
 		dbg!(&tree);
-		assert!(tree.contains("example.com", true).is_some());
-		assert!(tree.contains("xample.com", true).is_none());
-		assert!(tree.contains("example.co", true).is_none());
-		assert!(tree.contains("eexample.com", true).is_none());
+		assert!(tree.find("example.com", true).is_some());
+		assert!(tree.find("xample.com", true).is_none());
+		assert!(tree.find("example.co", true).is_none());
+		assert!(tree.find("eexample.com", true).is_none());
 		tree.insert("eexample.com", 0);
 		dbg!(&tree);
-		assert!(tree.contains("eexample.com", true).is_some());
+		assert!(tree.find("eexample.com", true).is_some());
 
-		assert!(tree.contains("foo.example.com", true).is_some());
-		assert!(tree.contains("foo.example.com", false).is_none());
+		assert!(tree.find("foo.example.com", true).is_some());
+		assert!(tree.find("foo.example.com", false).is_none());
 	}
 
 	#[cfg(nightly)]

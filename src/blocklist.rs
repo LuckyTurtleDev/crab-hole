@@ -182,7 +182,7 @@ impl BlockList {
 			.read()
 			.await
 			.trie
-			.contains(domain, include_subdomains)
+			.find(domain, include_subdomains)
 			.is_some()
 	}
 

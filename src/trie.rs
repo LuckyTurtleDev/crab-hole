@@ -95,7 +95,7 @@ impl Trie {
 
 	pub(crate) fn query(&self, domain: &str) -> Vec<(&BitVec, usize)> {
 		// not the fasted way, but it does not slow down the `contains` function
-		// and has no dublicated code
+		// and has no duplicated code
 		let pos_iter =
 			iter::once(0).chain(domain.bytes().enumerate().filter_map(|(i, byte)| {
 				if byte == b'.' {

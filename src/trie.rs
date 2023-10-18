@@ -1,6 +1,7 @@
 use bit_vec::BitVec;
 use qp_trie::Trie as QTrie;
 use std::{
+	collections::VecDeque,
 	fmt::{self, Debug, Formatter},
 	iter
 };
@@ -111,6 +112,29 @@ impl Trie {
 			}
 		}
 		hits
+	}
+
+	pub(crate) fn remove(
+		&mut self,
+		domain: &str,
+		remove_subdoamains: bool
+	) -> QTrie<Vec<u8>, BitVec> {
+		let mut key: Vec<u8> = domain.bytes().rev().collect();
+		let direct_hit = self.0.remove(&key);
+		let mut removed_domains = if remove_subdoamains {
+			// if the domain ist `foo.com` we want to also remove `baa.foo.com`,
+			// but keep `baafoo.com`
+			key.push(b'.');
+			let removed_trie = self.0.remove_prefix(&key);
+			key.pop();
+			removed_trie
+		} else {
+			QTrie::default()
+		};
+		if let Some(direct_hit) = direct_hit {
+			removed_domains.insert(key, direct_hit);
+		}
+		removed_domains
 	}
 
 	pub(crate) fn shrink_to_fit(&mut self) {}

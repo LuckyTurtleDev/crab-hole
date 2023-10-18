@@ -186,6 +186,28 @@ impl BlockList {
 			.is_some()
 	}
 
+	pub(crate) async fn remove(
+		&self,
+		domain: &str,
+		remove_subdomains: bool
+	) -> Vec<String> {
+		let mut guard = self.rw_lock.write().await;
+		let removed = guard.trie.remove(domain, remove_subdomains);
+		removed
+			.into_iter()
+			.map(|(mut domain, index)| {
+				// reduce the counter of blocked domains in listinfo
+				for (i, is_in) in index.iter().enumerate() {
+					if is_in {
+						guard.list_info[i].blocked -= 1;
+					}
+				}
+				domain.reverse();
+				String::from_utf8(domain).unwrap() //should only include valid utf8
+			})
+			.collect()
+	}
+
 	pub(crate) async fn list<'a>(&self) -> Vec<ListInfo> {
 		self.rw_lock.read().await.list_info.to_owned()
 	}

@@ -1,7 +1,6 @@
 use bit_vec::BitVec;
 use qp_trie::Trie as QTrie;
 use std::{
-	collections::VecDeque,
 	fmt::{self, Debug, Formatter},
 	iter
 };
@@ -213,7 +212,7 @@ mod tests {
 
 		fn load_domains(path: &str) -> Vec<String> {
 			let path = format!("{}/{}", env!("CARGO_MANIFEST_DIR"), path);
-			let raw_list = fs::read_to_string(&path).unwrap();
+			let raw_list = read_to_string(&path).unwrap();
 			let list = crate::parser::Blocklist::parse(&path, &raw_list)
 				.ok()
 				.unwrap();

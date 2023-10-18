@@ -3,7 +3,7 @@ include_subdomains = true
 lists = [
 	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts",
 	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt",
-	"file:///blocked.txt"
+	"file:///tmp/blocked.txt"
 ]
 
 # optional
@@ -24,35 +24,6 @@ port = 8080
 protocol = "udp"
 listen = "[::]" #all ipv6 and ipv4 adress
 port = 8053
-
-[[downstream]]
-protocol = "tls"
-listen = "[::]"
-port = 8054
-certificate = "dns.example.com.crt"
-key = "dns.example.com.key"
-# optional (default = 3000)
-timeout_ms = 3000
-
-[[downstream]]
-protocol = "https"
-listen = "[::]"
-port = 8055
-certificate = "dns.example.com.crt"
-key = "dns.example.com.key"
-dns_hostname = "dns.example.com"
-# optional (default = 3000)
-timeout_ms = 3000
-
-[[downstream]]
-protocol = "quic"
-listen = "127.0.0.1"
-port = 8055
-certificate = "dns.example.com.crt"
-key = "dns.example.com.key"
-dns_hostname = "dns.example.com"
-# optional (default = 3000)
-timeout_ms = 3000
 
 # optional
 [upstream.options]

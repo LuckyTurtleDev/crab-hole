@@ -1,18 +1,13 @@
-use crate::{parser, trie::Trie, CLIENT, LIST_DIR};
+use crate::{get_file, parser, trie::Trie, LIST_DIR};
 use anyhow::Context;
 use log::{error, info, warn};
 use num_format::{Locale, ToFormattedString};
-use std::{
-	path::PathBuf,
-	sync::{
-		atomic::{AtomicUsize, Ordering},
-		Arc
-	}
+use std::sync::{
+	atomic::{AtomicUsize, Ordering},
+	Arc
 };
-use tokio::{
-	fs::{create_dir_all, read_to_string, write},
-	sync::RwLock
-};
+use tokio::{fs::create_dir_all, sync::RwLock};
+use trust_dns_proto::rr::domain;
 use url::Url;
 
 #[derive(Clone, Debug, poem_openapi::Object)]
@@ -26,6 +21,25 @@ pub(crate) struct ListInfo {
 pub(crate) struct InnerBlockList {
 	trie: Trie,
 	list_info: Vec<ListInfo>
+}
+
+impl InnerBlockList {
+	pub(crate) fn remove(&self, domain: &str, remove_subdomains: bool) -> Vec<String> {
+		let removed = self.trie.remove(domain, remove_subdomains);
+		removed
+			.into_iter()
+			.map(|(mut domain, index)| {
+				// reduce the counter of blocked domains in listinfo
+				for (i, is_in) in index.iter().enumerate() {
+					if is_in {
+						self.list_info[i].blocked -= 1;
+					}
+				}
+				domain.reverse();
+				String::from_utf8(domain).unwrap() //should only include valid utf8
+			})
+			.collect()
+	}
 }
 
 #[derive(Debug, Default)]
@@ -43,6 +57,7 @@ impl BlockList {
 	pub(crate) async fn update(
 		&self,
 		adlist: &Vec<Url>,
+		allow_list: &Vec<Url>,
 		restore_from_cache: bool,
 		blocklist_len: Arc<AtomicUsize>
 	) {
@@ -60,79 +75,9 @@ impl BlockList {
 		let mut trie = Trie::new();
 		let mut list_info = Vec::new();
 
+		// block list
 		for url in adlist {
-			let raw_list = if url.scheme() == "file" {
-				let path = url.path();
-				info!("load file {path:?}");
-				let raw_list = read_to_string(&path).await;
-				match raw_list.with_context(|| format!("can not open file {path:?}")) {
-					Ok(value) => Some(value),
-					Err(err) => {
-						error!("{err:?}");
-						None
-					}
-				}
-			} else {
-				let mut path = url.path().to_owned().replace('/', "-");
-				if !path.is_empty() {
-					path.remove(0);
-				}
-				if let Some(query) = url.query() {
-					path += "--";
-					path += query;
-				}
-				let path = PathBuf::from(&*LIST_DIR).join(path);
-				let raw_list = if !path.exists() || !restore_from_cache {
-					info!("downloading {url}");
-					let resp: anyhow::Result<String> = (|| async {
-						//try block
-						let resp = CLIENT
-							.get(url.to_owned())
-							.send()
-							.await?
-							.error_for_status()?
-							.text()
-							.await?;
-						if let Err(err) = write(&path, &resp)
-							.await
-							.with_context(|| format!("failed to save to {path:?}"))
-						{
-							error!("{err:?}");
-						}
-						Ok(resp)
-					})()
-					.await;
-					match resp.with_context(|| format!("error downloading {url}")) {
-						Ok(value) => Some(value),
-						Err(err) => {
-							error!("{err:?}");
-							None
-						}
-					}
-				} else {
-					None
-				};
-				match raw_list {
-					Some(value) => Some(value),
-					None => {
-						if path.exists() {
-							info!("restore from cache {url}");
-							match read_to_string(&path)
-								.await
-								.with_context(|| format!("error reading file {path:?}"))
-							{
-								Ok(value) => Some(value),
-								Err(err) => {
-									error!("{err:?}");
-									None
-								}
-							}
-						} else {
-							None
-						}
-					},
-				}
-			};
+			let raw_list = get_file(url, restore_from_cache).await;
 			match raw_list {
 				None => error!("skipp list {url}"),
 				Some(raw_list) => {
@@ -159,8 +104,36 @@ impl BlockList {
 				}
 			}
 		}
+
+		let inner_block_list = InnerBlockList { trie, list_info };
+
+		// allow list
+		for url in allow_list {
+			info!("load allow list");
+			let raw_list = get_file(url, restore_from_cache).await;
+			match raw_list {
+				None => error!("skipp list {url}"),
+				Some(raw_list) => {
+					let result = parser::Blocklist::parse(url.as_str(), &raw_list);
+					match result {
+						Err(err) => {
+							error!("parsing allow list {}", url.as_str());
+							err.print();
+						},
+						Ok(list) => {
+							for entry in list.entries {
+								inner_block_list.remove(
+									&entry.domain().0,
+									entry.domain().0.starts_with("*.")
+								);
+							}
+						},
+					}
+				}
+			}
+		}
 		info!("shrink blocklist");
-		trie.shrink_to_fit();
+		inner_block_list.trie.shrink_to_fit();
 		let blocked_count = trie.len();
 		blocklist_len.store(blocked_count, Ordering::Relaxed);
 		info!(
@@ -184,28 +157,6 @@ impl BlockList {
 			.trie
 			.find(domain, include_subdomains)
 			.is_some()
-	}
-
-	pub(crate) async fn remove(
-		&self,
-		domain: &str,
-		remove_subdomains: bool
-	) -> Vec<String> {
-		let mut guard = self.rw_lock.write().await;
-		let removed = guard.trie.remove(domain, remove_subdomains);
-		removed
-			.into_iter()
-			.map(|(mut domain, index)| {
-				// reduce the counter of blocked domains in listinfo
-				for (i, is_in) in index.iter().enumerate() {
-					if is_in {
-						guard.list_info[i].blocked -= 1;
-					}
-				}
-				domain.reverse();
-				String::from_utf8(domain).unwrap() //should only include valid utf8
-			})
-			.collect()
 	}
 
 	pub(crate) async fn list<'a>(&self) -> Vec<ListInfo> {

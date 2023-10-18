@@ -2,12 +2,7 @@ use crate::{get_file, parser, trie::Trie, LIST_DIR};
 use anyhow::Context;
 use log::{error, info, warn};
 use num_format::{Locale, ToFormattedString};
-use std::sync::{
-	atomic::{AtomicUsize, Ordering},
-	Arc
-};
 use tokio::{fs::create_dir_all, sync::RwLock};
-use trust_dns_proto::rr::domain;
 use url::Url;
 
 #[derive(Clone, Debug, poem_openapi::Object)]
@@ -24,7 +19,11 @@ pub(crate) struct InnerBlockList {
 }
 
 impl InnerBlockList {
-	pub(crate) fn remove(&self, domain: &str, remove_subdomains: bool) -> Vec<String> {
+	pub(crate) fn remove(
+		&mut self,
+		domain: &str,
+		remove_subdomains: bool
+	) -> Vec<String> {
 		let removed = self.trie.remove(domain, remove_subdomains);
 		removed
 			.into_iter()
@@ -58,8 +57,7 @@ impl BlockList {
 		&self,
 		adlist: &Vec<Url>,
 		allow_list: &Vec<Url>,
-		restore_from_cache: bool,
-		blocklist_len: Arc<AtomicUsize>
+		restore_from_cache: bool
 	) {
 		if restore_from_cache {
 			info!("👮💾 restore blocklist, from cache");
@@ -105,7 +103,7 @@ impl BlockList {
 			}
 		}
 
-		let inner_block_list = InnerBlockList { trie, list_info };
+		let mut inner_block_list = InnerBlockList { trie, list_info };
 
 		// allow list
 		for url in allow_list {
@@ -134,18 +132,15 @@ impl BlockList {
 		}
 		info!("shrink blocklist");
 		inner_block_list.trie.shrink_to_fit();
-		let blocked_count = trie.len();
-		blocklist_len.store(blocked_count, Ordering::Relaxed);
 		info!(
 			"{} domains are blocked",
-			blocked_count.to_formatted_string(&Locale::en)
+			inner_block_list.trie.len().to_formatted_string(&Locale::en)
 		);
-		if blocked_count == 0 {
+		if inner_block_list.trie.len() == 0 {
 			warn!("Blocklist is empty");
 		}
 		let mut guard = self.rw_lock.write().await;
-		guard.trie = trie;
-		guard.list_info = list_info;
+		*guard = inner_block_list;
 		drop(guard);
 		info!("👮✅ finish updating blocklist");
 	}
@@ -161,6 +156,10 @@ impl BlockList {
 
 	pub(crate) async fn list<'a>(&self) -> Vec<ListInfo> {
 		self.rw_lock.read().await.list_info.to_owned()
+	}
+
+	pub(crate) async fn len(&self) -> usize {
+		self.rw_lock.read().await.trie.len()
 	}
 
 	pub(crate) async fn query(&self, domain: &str) -> Vec<(ListInfo, usize)> {

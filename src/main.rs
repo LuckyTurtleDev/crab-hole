@@ -28,7 +28,7 @@ use std::{
 	iter,
 	path::PathBuf,
 	sync::{
-		atomic::{AtomicU64, AtomicUsize, Ordering},
+		atomic::{AtomicU64, Ordering},
 		Arc
 	},
 	time::Duration
@@ -129,7 +129,7 @@ struct Handler {
 }
 
 impl Handler {
-	async fn new(config: &Config, stats: Stats, blocklist_len: Arc<AtomicUsize>) -> Self {
+	async fn new(config: &Config, stats: Stats) -> Self {
 		let zone_name = Name::root();
 		let authority = ForwardAuthority::try_from_config(
 			zone_name.clone(),
@@ -143,7 +143,7 @@ impl Handler {
 
 		let blocklist = BlockList::new();
 		blocklist
-			.update(&config.blocklist.lists, true, blocklist_len)
+			.update(&config.blocklist.lists, &config.blocklist.allow_list, true)
 			.await;
 
 		Self {
@@ -318,8 +318,7 @@ async fn get_file(url: &Url, restore_from_cache: bool) -> Option<String> {
 #[tokio::main]
 async fn async_main(config: Config) {
 	let stats = Stats::default();
-	let blocklist_len = Arc::new(AtomicUsize::new(0));
-	let handler = Handler::new(&config, stats.clone(), blocklist_len.clone()).await;
+	let handler = Handler::new(&config, stats.clone()).await;
 	let blocklist = handler.blocklist.clone();
 	let mut server = Server::new(handler);
 	for downstream in config.downstream {
@@ -391,14 +390,12 @@ async fn async_main(config: Config) {
 			}
 		}
 	}
-	let blocklist_len_move = blocklist_len.clone();
 	let blocklist_move = blocklist.clone();
 	tokio::spawn(async move {
 		let blocklist = blocklist_move;
-		let lists = config.blocklist.lists;
 		loop {
 			blocklist
-				.update(&lists, false, blocklist_len_move.clone())
+				.update(&config.blocklist.lists, &config.blocklist.allow_list, false)
 				.await;
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
@@ -412,7 +409,7 @@ async fn async_main(config: Config) {
 				.with_context(|| "failed to start dns server")
 		},
 		async {
-			api::init(config.api, stats, blocklist, blocklist_len.clone())
+			api::init(config.api, stats, blocklist)
 				.await
 				.with_context(|| "failed to start api/web server")
 		}

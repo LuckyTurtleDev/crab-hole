@@ -422,15 +422,17 @@ async fn async_main(config: Config) {
 struct Config {
 	upstream: ForwardConfig,
 	downstream: Vec<DownstreamConfig>,
+	#[serde(default)]
 	blocklist: BlockConfig,
 	api: Option<api::Config>
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BlockConfig {
 	lists: Vec<Url>,
 	include_subdomains: bool,
+	#[serde(default)]
 	allow_list: Vec<Url>
 }
 

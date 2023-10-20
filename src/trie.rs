@@ -179,6 +179,32 @@ mod tests {
 		assert!(tree.find("foo.example.com", false).is_none());
 	}
 
+	#[test]
+	fn remove() {
+		let mut tree = Trie::new();
+		tree.insert("example.com", 0);
+		tree.insert("sub.example.com", 0);
+		dbg!(&tree);
+		assert!(tree.find("example.com", false).is_some());
+		assert!(tree.find("foo.example.com", false).is_some());
+		tree.remove("example.com", false);
+		assert!(tree.find("example.com", false).is_none());
+		assert!(tree.find("foo.example.com", false).is_some());
+	}
+
+	#[test]
+	fn remove_sub() {
+		let mut tree = Trie::new();
+		tree.insert("example.com", 0);
+		tree.insert("sub.example.com", 0);
+		dbg!(&tree);
+		assert!(tree.find("example.com", false).is_some());
+		assert!(tree.find("foo.example.com", false).is_some());
+		tree.remove("example.com", true);
+		assert!(tree.find("example.com", false).is_none());
+		assert!(tree.find("foo.example.com", false).is_none());
+	}
+
 	#[cfg(nightly)]
 	mod bench {
 		use super::*;

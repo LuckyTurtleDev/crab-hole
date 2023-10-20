@@ -97,7 +97,7 @@ jobs:
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v3
         with:
-          name: "${{ matrix.target }} --${{ matrix.roots }}"
+          name: "${{ matrix.target }}--${{ matrix.roots }}"
           path: |
             target/${{ matrix.target }}/release/crab-hole
             target/${{ matrix.target }}/release/crab-hole.exe

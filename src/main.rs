@@ -11,6 +11,7 @@ extern crate test;
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 mod api;
+mod logger;
 mod parser;
 
 use anyhow::{bail, Context};
@@ -102,6 +103,8 @@ mod trie;
 
 mod blocklist;
 use blocklist::BlockList;
+
+use crate::logger::init_logger;
 
 #[derive(Debug, Clone)]
 struct Stats {
@@ -401,8 +404,7 @@ struct HttpsAndQuicConfig {
 }
 
 fn main() {
-	my_env_logger_style::get_set_max_module_len(20);
-	my_env_logger_style::just_log();
+	init_logger();
 	info!("🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
 	Lazy::force(&CONFIG_PATH);
 	Lazy::force(&LIST_DIR);

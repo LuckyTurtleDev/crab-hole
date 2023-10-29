@@ -10,7 +10,7 @@ static REGEX: Lazy<Regex> = Lazy::new(|| {
 	// https://ihateregex.io/expr/ipv6/
 	let regex_ipv6 = r"(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))";
 	// emoji: https://ihateregex.io/expr/emoji/
-	let regex_domain = r"(([\w\-]|(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]))+\.){2,}";
+	let regex_domain = r"(([\w\-\p{Math}\p{Emoji}\p{Emoji_Component}])+\.){2,}";
 	Regex::new(&format! {"{regex_ipv4}|{regex_ipv6}|{regex_domain}"}).unwrap()
 });
 
@@ -45,5 +45,18 @@ mod tests {
 	#[test]
 	fn regex() {
 		Lazy::force(&REGEX);
+		assert!(REGEX.replace("com.", "") == "com."); //matching this would cause to much false positive
+		assert!(REGEX.replace(".com.", "") == ".com.");
+		assert!(REGEX.replace("example.com.", "") == "");
+		assert!(REGEX.replace("ex_am-ple.com.", "") == "");
+		assert!(REGEX.replace(".example.com.", "") == ".");
+		assert!(REGEX.replace(":example.com.", "") == ":");
+		assert!(REGEX.replace("eiea.eiuuue.euu.", "") == "");
+		assert!(REGEX.replace("🐬.com.", "") == "");
+		assert!(REGEX.replace("👪.com.", "") == "");
+		assert!(REGEX.replace("♡.com.", "") == ""); //`♡` is a Math char
+		assert!(REGEX.replace("ä.com.", "") == "");
+		assert!(REGEX.replace("∫.com.", "") == ""); //is this a valid domain?
+		assert!(REGEX.replace(":.com.", "") == ":.com.");
 	}
 }

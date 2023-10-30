@@ -239,7 +239,7 @@ mod tests {
 		use std::{
 			collections::HashSet,
 			ffi::{c_char, c_void},
-			fs,
+			fs::read_to_string,
 			io::{self, Write as _},
 			ptr::{null, null_mut}
 		};
@@ -298,7 +298,7 @@ mod tests {
 			let domains: HashSet<String> = domains.into_iter().take(1000).collect();
 			b.iter(|| {
 				for domain in &domains {
-					if trie.find(domain, true).is_none() {
+					if !trie.blocked(domain, true) {
 						panic!("this domain should be insert")
 					};
 				}
@@ -317,7 +317,7 @@ mod tests {
 			let miss_domanis = load_domains("/bench/missing-domains.txt");
 			b.iter(|| {
 				for domain in &miss_domanis {
-					trie.find(domain, true);
+					trie.blocked(domain, true);
 				}
 			});
 		}

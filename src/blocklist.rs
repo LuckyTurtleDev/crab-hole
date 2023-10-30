@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{get_file, parser, trie::Trie, LIST_DIR};
 use anyhow::Context;
 use log::{error, info, warn};
@@ -147,17 +149,33 @@ impl BlockList {
 		self.rw_lock.read().await.trie.len()
 	}
 
-	pub(crate) async fn query(&self, domain: &str) -> Vec<(ListInfo, usize)> {
+	/// querry all block and allow entrys assiated with `domain` including subdomains.
+	/// retrun the listinfo, allowed_state and start pos of the match
+	pub(crate) async fn query(&self, domain: &str) -> HashMap<String, QueryInfo> {
 		let guard = self.rw_lock.read().await;
-		let mut hits = Vec::new();
+		let mut hits = HashMap::new();
 		for (trie_value, pos) in guard.trie.query(domain).iter() {
+			let mut query_info = QueryInfo {
+				lists: Vec::new(),
+				allowed: trie_value.allowed
+			};
 			for (i, is_in) in trie_value.block_source.iter().enumerate() {
 				if is_in {
 					let list_info = guard.list_info.get(i).unwrap();
-					hits.push((list_info.to_owned(), pos.to_owned()))
+					query_info.lists.push(list_info.url.clone());
 				}
 			}
+			hits.insert((domain[*pos ..]).to_owned(), query_info);
 		}
 		hits
 	}
+}
+
+#[derive(Debug, poem_openapi::Object)]
+pub(crate) struct QueryInfo {
+	/// url of the blocklists, which blocks the domain
+	lists: Vec<String>,
+	/// indicate if the access to the matched domain is blocked
+	/// or was allowed by a allowlist
+	allowed: bool
 }

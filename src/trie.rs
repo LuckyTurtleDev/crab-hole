@@ -109,6 +109,7 @@ impl Trie {
 		}
 	}
 
+	/// return all block and allow entrys assiated with `domain` including subdomains
 	pub(crate) fn query(&self, domain: &str) -> Vec<(&TrieValue, usize)> {
 		// not the fasted way, but it does not slow down the `blocked` function
 		// and has no duplicated code
@@ -116,12 +117,12 @@ impl Trie {
 		let pos_iter = domain
 			.iter()
 			.enumerate()
-			.filter_map(|(i, byte)| if byte == &b'.' { Some(i + 1) } else { None })
-			.chain(iter::once(domain.len() + 1));
+			.filter_map(|(i, byte)| if byte == &b'.' { Some(i) } else { None })
+			.chain(iter::once(domain.len()));
 		let mut hits = Vec::new();
 		for pos in pos_iter {
 			if let Some(index) = self.0.get(&domain[.. pos]) {
-				hits.push((index, pos));
+				hits.push((index, domain.len() - pos)); //order in rev here
 			}
 		}
 		hits

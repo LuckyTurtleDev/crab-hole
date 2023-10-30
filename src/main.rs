@@ -422,9 +422,26 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use std::{thread, process::Command};
+    use crate::async_main;
+
 	#[test]
 	fn config_file() {
 		let config = include_bytes!("../config.toml");
 		let _: super::Config = toml::from_slice(config).unwrap();
+	}
+	#[test]
+	fn example_config_file() {
+		let config = include_bytes!("../example-config.toml");
+		let _: super::Config = toml::from_slice(config).unwrap();
+	}
+	
+	#[test]
+	#[ignore]
+	fn run() {
+		let config = include_bytes!("../config.toml");
+		let config: super::Config = toml::from_slice(config).unwrap();
+		let _ = thread::spawn(|| async_main(config));
+		assert!(Command::new("kdig").args(["example.com","@localhost:8080"]).status().unwrap().success());
 	}
 }

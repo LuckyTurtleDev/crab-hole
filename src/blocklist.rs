@@ -19,25 +19,8 @@ pub(crate) struct InnerBlockList {
 }
 
 impl InnerBlockList {
-	pub(crate) fn remove(
-		&mut self,
-		domain: &str,
-		remove_subdomains: bool
-	) -> Vec<String> {
-		let removed = self.trie.remove(domain, remove_subdomains);
-		removed
-			.into_iter()
-			.map(|(mut domain, index)| {
-				// reduce the counter of blocked domains in listinfo
-				for (i, is_in) in index.iter().enumerate() {
-					if is_in {
-						self.list_info[i].blocked -= 1;
-					}
-				}
-				domain.reverse();
-				String::from_utf8(domain).unwrap() //should only include valid utf8
-			})
-			.collect()
+	pub(crate) fn allow(&mut self, domain: &str, allow_subdomains: bool) {
+		self.trie.allow(domain, allow_subdomains);
 	}
 }
 
@@ -120,10 +103,11 @@ impl BlockList {
 						},
 						Ok(list) => {
 							for entry in list.entries {
-								inner_block_list.remove(
-									&entry.domain().0,
-									entry.domain().0.starts_with("*.")
-								);
+								if entry.domain().0.starts_with("*.") {
+									inner_block_list.allow(&entry.domain().0[2 ..], true);
+								} else {
+									inner_block_list.allow(&entry.domain().0, false);
+								}
 							}
 						},
 					}
@@ -150,7 +134,7 @@ impl BlockList {
 			.read()
 			.await
 			.trie
-			.find(domain, include_subdomains)
+			.get(domain, include_subdomains)
 			.is_some()
 	}
 
@@ -165,8 +149,8 @@ impl BlockList {
 	pub(crate) async fn query(&self, domain: &str) -> Vec<(ListInfo, usize)> {
 		let guard = self.rw_lock.read().await;
 		let mut hits = Vec::new();
-		for (index, pos) in guard.trie.query(domain).iter() {
-			for (i, is_in) in index.iter().enumerate() {
+		for (trie_value, pos) in guard.trie.query(domain).iter() {
+			for (i, is_in) in trie_value.block_source.iter().enumerate() {
 				if is_in {
 					let list_info = guard.list_info.get(i).unwrap();
 					hits.push((list_info.to_owned(), pos.to_owned()))

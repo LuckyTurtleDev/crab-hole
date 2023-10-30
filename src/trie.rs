@@ -6,7 +6,19 @@ use std::{
 };
 
 #[derive(Default)]
-pub(crate) struct Trie(QTrie<Vec<u8>, BitVec>);
+pub(crate) struct TrieValue {
+	/// domain is blocked if [`BitVec`] contains at least one true
+	/// `true`s in [`BitVec`] are the indices of those lists in `BlockList.list_info`
+	/// that contain the domain.
+	pub(crate) block_source: BitVec,
+	/// domain was manuall allowed.
+	/// Allows have a higher piority than blocks
+	/// I think we do not need track the sources here, since they are regular not many allow lists.
+	pub(crate) allowed: bool
+}
+
+#[derive(Default)]
+pub(crate) struct Trie(QTrie<Vec<u8>, TrieValue>);
 
 impl Debug for Trie {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -47,16 +59,23 @@ impl Trie {
 		}
 		let key: Vec<u8> = domain.bytes().rev().collect();
 		let mut index = BitVec::from_elem(list_info_index + 1, false);
+		// We will add more new value than editing existing once.
+		// So we assume that value does not exist first and try to insert a new value first.
 		index.set(list_info_index, true);
-		let old_value = self.0.insert(key.clone(), index);
+		let old_value = self.0.insert(key.clone(), TrieValue {
+			block_source: index,
+			allowed: false
+		});
 		if let Some(mut old_value) = old_value {
 			// if value already exist, we need to add the entry to the existing bitvec
-			was_already_add_by_this_list =
-				old_value.get(list_info_index).is_some_and(|f| f);
-			if list_info_index + 1 > old_value.len() {
-				let grow = list_info_index + 1 - old_value.len();
-				old_value.grow(grow, false);
-				old_value.set(list_info_index, true);
+			was_already_add_by_this_list = old_value
+				.block_source
+				.get(list_info_index)
+				.is_some_and(|f| f);
+			if list_info_index + 1 > old_value.block_source.len() {
+				let grow = list_info_index + 1 - old_value.block_source.len();
+				old_value.block_source.grow(grow, false);
+				old_value.block_source.set(list_info_index, true);
 			}
 			self.0.insert(key, old_value);
 		};
@@ -67,7 +86,11 @@ impl Trie {
 	/// trie. Otherwise it returns a reference to a [`BitVec`], where the position of
 	/// `true`s in [`BitVec`] are the indices of those lists in `BlockList.list_info`
 	/// that contain the domain.
-	pub(crate) fn find(&self, domain: &str, include_subdomains: bool) -> Option<&BitVec> {
+	pub(crate) fn get(
+		&self,
+		domain: &str,
+		include_subdomains: bool
+	) -> Option<&TrieValue> {
 		if include_subdomains {
 			let mut key = Vec::new();
 			let mut domain = domain.bytes().rev();
@@ -93,7 +116,7 @@ impl Trie {
 		}
 	}
 
-	pub(crate) fn query(&self, domain: &str) -> Vec<(&BitVec, usize)> {
+	pub(crate) fn query(&self, domain: &str) -> Vec<(&TrieValue, usize)> {
 		// not the fasted way, but it does not slow down the `contains` function
 		// and has no duplicated code
 		let pos_iter =
@@ -106,34 +129,30 @@ impl Trie {
 			}));
 		let mut hits = Vec::new();
 		for pos in pos_iter {
-			if let Some(index) = self.find(&domain[pos ..], false) {
+			if let Some(index) = self.get(&domain[pos ..], false) {
 				hits.push((index, pos));
 			}
 		}
 		hits
 	}
 
-	pub(crate) fn remove(
-		&mut self,
-		domain: &str,
-		remove_subdoamains: bool
-	) -> QTrie<Vec<u8>, BitVec> {
-		let mut key: Vec<u8> = domain.bytes().rev().collect();
-		let direct_hit = self.0.remove(&key);
-		let mut removed_domains = if remove_subdoamains {
-			// if the domain ist `foo.com` we want to also remove `baa.foo.com`,
-			// but keep `baafoo.com`
-			key.push(b'.');
-			let removed_trie = self.0.remove_prefix(&key);
-			key.pop();
-			removed_trie
-		} else {
-			QTrie::default()
-		};
-		if let Some(direct_hit) = direct_hit {
-			removed_domains.insert(key, direct_hit);
+	pub(crate) fn allow(&mut self, domain: &str, remove_subdoamains: bool) {
+		let mut key: Vec<u8> = domain.bytes().rev().chain(iter::once(b'.')).collect();
+		if remove_subdoamains {
+			for (_, entry) in self.0.iter_prefix_mut(&key) {
+				entry.allowed = true;
+			}
 		}
-		removed_domains
+		key.pop();
+		if let Some(entry) = self.0.get_mut(&key) {
+			entry.allowed = true;
+		} else {
+			let entry = TrieValue {
+				allowed: true,
+				block_source: BitVec::new()
+			};
+			self.0.insert(key.clone(), entry);
+		}
 	}
 
 	pub(crate) fn shrink_to_fit(&mut self) {}

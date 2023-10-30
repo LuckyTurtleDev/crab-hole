@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - run: sudo apt-get update -y && sudo apt-get install -y knot-dnsutils
       - uses: dtolnay/rust-toolchain@stable
         id: "rust-toolchain"
       - name: install cargo-all-features
@@ -24,7 +25,7 @@ jobs:
             ~/.cargo/registry
             target
           key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cargo test-all-features --locked
+      - run: cargo test-all-features --locked -- --include-ignored
         env:
           RUST_BACKTRACE: 1
 

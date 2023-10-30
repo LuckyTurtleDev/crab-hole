@@ -129,15 +129,16 @@ impl BlockList {
 		info!("👮✅ finish updating blocklist");
 	}
 
-	pub(crate) async fn contains(&self, domain: &str, include_subdomains: bool) -> bool {
+	/// return true if domain is blocked
+	pub(crate) async fn blocked(&self, domain: &str, include_subdomains: bool) -> bool {
 		self.rw_lock
 			.read()
 			.await
 			.trie
-			.get(domain, include_subdomains)
-			.is_some()
+			.blocked(domain, include_subdomains)
 	}
 
+	/// return info about all blocklist
 	pub(crate) async fn list<'a>(&self) -> Vec<ListInfo> {
 		self.rw_lock.read().await.list_info.to_owned()
 	}

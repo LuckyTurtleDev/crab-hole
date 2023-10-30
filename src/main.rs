@@ -169,7 +169,7 @@ impl RequestHandler for Handler {
 		self.stats.total_request.fetch_add(1, Ordering::Relaxed);
 		if self
 			.blocklist
-			.contains(
+			.blocked(
 				lower_query.name().to_string().trim_end_matches('.'),
 				self.include_subdomains
 			)

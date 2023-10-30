@@ -5,7 +5,7 @@ use std::{
 	iter
 };
 
-#[derive(Default)]
+#[derive(Debug)]
 pub(crate) struct TrieValue {
 	/// domain is blocked if [`BitVec`] contains at least one true
 	/// `true`s in [`BitVec`] are the indices of those lists in `BlockList.list_info`
@@ -28,10 +28,9 @@ impl Debug for Trie {
 			fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 				f.debug_list()
 					.entries(
-						self.0
-							 .0
-							.iter()
-							.map(|(bytes, _)| String::from_utf8_lossy(bytes))
+						self.0 .0.iter().map(|(bytes, value)| {
+							(String::from_utf8_lossy(bytes), value)
+						})
 					)
 					.finish()
 			}
@@ -82,19 +81,13 @@ impl Trie {
 		was_already_add_by_this_list
 	}
 
-	/// Search for a domain in this trie. Returns `None` if domain was not found in the
-	/// trie. Otherwise it returns a reference to a [`BitVec`], where the position of
-	/// `true`s in [`BitVec`] are the indices of those lists in `BlockList.list_info`
-	/// that contain the domain.
-	pub(crate) fn get(
-		&self,
-		domain: &str,
-		include_subdomains: bool
-	) -> Option<&TrieValue> {
+	/// return true if domain is blocked
+	pub(crate) fn blocked(&self, domain: &str, include_subdomains: bool) -> bool {
 		if include_subdomains {
 			let mut key = Vec::new();
 			let mut domain = domain.bytes().rev();
 			let mut sub_trie = self.0.subtrie(&Vec::new());
+			let mut allowed = true;
 			while !sub_trie.is_empty() {
 				for byte in &mut domain {
 					if byte == b'.' {
@@ -103,39 +96,39 @@ impl Trie {
 					key.push(byte);
 				}
 				sub_trie = sub_trie.subtrie(&*key);
-				let index = sub_trie.get(&*key);
-				if index.is_some() {
-					return index;
+				let trie_value = sub_trie.get(&*key);
+				if let Some(trie_value) = trie_value {
+					allowed = trie_value.allowed;
 				}
 				key.push(b'.');
 			}
-			None
+			!allowed
 		} else {
 			let key: Vec<u8> = domain.bytes().rev().collect();
-			self.0.get(&key)
+			self.0.get(&key).is_some_and(|f| !f.allowed)
 		}
 	}
 
 	pub(crate) fn query(&self, domain: &str) -> Vec<(&TrieValue, usize)> {
-		// not the fasted way, but it does not slow down the `contains` function
+		// not the fasted way, but it does not slow down the `blocked` function
 		// and has no duplicated code
-		let pos_iter =
-			iter::once(0).chain(domain.bytes().enumerate().filter_map(|(i, byte)| {
-				if byte == b'.' {
-					Some(i + 1) // +1 does not panic, if `.` is the last element
-				} else {
-					None
-				}
-			}));
+		let domain: Vec<u8> = domain.bytes().rev().collect();
+		let pos_iter = domain
+			.iter()
+			.enumerate()
+			.filter_map(|(i, byte)| if byte == &b'.' { Some(i + 1) } else { None })
+			.chain(iter::once(domain.len() + 1));
 		let mut hits = Vec::new();
 		for pos in pos_iter {
-			if let Some(index) = self.get(&domain[pos ..], false) {
+			if let Some(index) = self.0.get(&domain[.. pos]) {
 				hits.push((index, pos));
 			}
 		}
 		hits
 	}
 
+	/// allow a domain, even it was blocked before.
+	/// After calling this function [`Self::insert()`] should no called anymore at the same trie.
 	pub(crate) fn allow(&mut self, domain: &str, remove_subdoamains: bool) {
 		let mut key: Vec<u8> = domain.bytes().rev().chain(iter::once(b'.')).collect();
 		if remove_subdoamains {
@@ -169,72 +162,74 @@ mod tests {
 	#[test]
 	fn simple() {
 		let mut tree = Trie::new();
-		assert!(tree.find("example.com", false).is_none());
+		assert!(!tree.blocked("example.com", false));
 		tree.insert("example.com", 0);
-		assert!(tree.find("example.com", false).is_some());
-		assert!(tree.find("xample.com", false).is_none());
-		assert!(tree.find("example.co", false).is_none());
-		assert!(tree.find("eexample.com", false).is_none());
+		assert!(tree.blocked("example.com", false));
+		assert!(!tree.blocked("xample.com", false));
+		assert!(!tree.blocked("example.co", false));
+		assert!(!tree.blocked("eexample.com", false));
 		tree.insert("eexample.com", 0);
-		assert!(tree.find("eexample.com", false).is_some());
+		assert!(tree.blocked("eexample.com", false));
 	}
 
 	#[test]
 	fn sub_domain() {
 		let mut tree = Trie::new();
 		dbg!(&tree);
-		assert!(tree.find("example.com", true).is_none());
+		assert!(!tree.blocked("example.com", true));
 		tree.insert("example.com", 0);
 		dbg!(&tree);
-		assert!(tree.find("example.com", true).is_some());
-		assert!(tree.find("xample.com", true).is_none());
-		assert!(tree.find("example.co", true).is_none());
-		assert!(tree.find("eexample.com", true).is_none());
+		assert!(tree.blocked("example.com", true));
+		assert!(!tree.blocked("xample.com", true));
+		assert!(!tree.blocked("example.co", true));
+		assert!(!tree.blocked("eexample.com", true));
 		tree.insert("eexample.com", 0);
 		dbg!(&tree);
-		assert!(tree.find("eexample.com", true).is_some());
-
-		assert!(tree.find("foo.example.com", true).is_some());
-		assert!(tree.find("foo.example.com", false).is_none());
+		assert!(tree.blocked("eexample.com", true));
+		assert!(tree.blocked("foo.example.com", true));
+		assert!(!tree.blocked("foo.example.com", false));
 	}
 
 	#[test]
-	fn remove() {
+	fn allow() {
 		let mut tree = Trie::new();
 		tree.insert("example.com", 0);
 		tree.insert("sub.example.com", 0);
 		dbg!(&tree);
-		assert!(tree.find("example.com", false).is_some());
-		assert!(tree.find("foo.example.com", false).is_some());
-		tree.remove("example.com", false);
-		assert!(tree.find("example.com", false).is_none());
-		assert!(tree.find("foo.example.com", false).is_some());
+		assert!(tree.blocked("example.com", false));
+		assert!(tree.blocked("sub.example.com", false));
+		tree.allow("example.com", false);
+		dbg!(&tree);
+		assert!(!tree.blocked("example.com", false));
+		assert!(tree.blocked("sub.example.com", false));
 	}
 
 	#[test]
-	fn remove_allsub() {
+	fn allow_all_subdomains() {
 		let mut tree = Trie::new();
 		tree.insert("example.com", 0);
 		tree.insert("sub.example.com", 0);
 		dbg!(&tree);
-		assert!(tree.find("example.com", false).is_some());
-		assert!(tree.find("foo.example.com", false).is_some());
-		tree.remove("example.com", true);
-		assert!(tree.find("example.com", false).is_none());
-		assert!(tree.find("foo.example.com", false).is_none());
+		assert!(tree.blocked("example.com", false));
+		assert!(tree.blocked("sub.example.com", false));
+		tree.allow("example.com", true);
+		dbg!(&tree);
+		assert!(!tree.blocked("example.com", false));
+		assert!(!tree.blocked("sub.example.com", false));
 	}
 
 	#[test]
-	fn remove_sub() {
+	fn allow_sub_domain() {
 		let mut tree = Trie::new();
 		tree.insert("example.com", 0);
 		tree.insert("sub.example.com", 0);
 		dbg!(&tree);
-		assert!(tree.find("example.com", true).is_some());
-		assert!(tree.find("foo.example.com", true).is_some());
-		tree.remove("sub.example.com", true);
-		assert!(tree.find("example.com", true).is_none());
-		assert!(tree.find("foo.example.com", true).is_none());
+		assert!(tree.blocked("example.com", true));
+		assert!(tree.blocked("sub.example.com", true));
+		tree.allow("sub.example.com", true);
+		dbg!(&tree);
+		assert!(tree.blocked("example.com", true));
+		assert!(!tree.blocked("sub.example.com", true));
 	}
 
 	#[cfg(nightly)]

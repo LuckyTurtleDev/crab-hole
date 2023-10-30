@@ -25,7 +25,7 @@ jobs:
             ~/.cargo/registry
             target
           key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cargo test-all-features --include-ignored --locked
+      - run: cargo test-all-features --locked -- --include-ignored
         env:
           RUST_BACKTRACE: 1
 

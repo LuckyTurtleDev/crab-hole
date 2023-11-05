@@ -8,14 +8,14 @@ use poem_openapi::{
 	Object, OpenApi, OpenApiService, SecurityScheme
 };
 use serde::Deserialize;
-use std::sync::{
-	atomic::{AtomicUsize, Ordering},
-	Arc
+use std::{
+	collections::HashMap,
+	sync::{atomic::Ordering, Arc}
 };
 use time::OffsetDateTime;
 
 use crate::{
-	blocklist::{BlockList, ListInfo},
+	blocklist::{BlockList, ListInfo, QueryInfo},
 	CARGO_PKG_NAME, CARGO_PKG_VERSION
 };
 
@@ -77,20 +77,9 @@ struct Stats {
 	running_since: OffsetDateTime
 }
 
-#[derive(Debug, Object)]
-struct BlockInfo {
-	/// url of the blocklist, which blocks the domain
-	list: String,
-	/// domain which is blocked and match the qurry domain
-	domain: String,
-	/// indicate if the query domain is a subdomain from a blocked domain
-	subdomain: bool
-}
-
 struct Api {
 	doc_enable: bool,
 	stats: crate::Stats,
-	blocklist_len: Arc<AtomicUsize>,
 	key: Option<String>,
 	blocklist: Arc<BlockList>
 }
@@ -120,7 +109,7 @@ impl Api {
 		let blocked_ratio = (blocked_ratio * 100.0).round() / 100.0;
 		Json(PubStats {
 			blocked_ratio,
-			blocklist_len: self.blocklist_len.load(Ordering::Relaxed),
+			blocklist_len: self.blocklist.len().await,
 			running_since: self.stats.running_since
 		})
 	}
@@ -132,19 +121,9 @@ impl Api {
 		&self,
 		key: Key,
 		domain: Query<String>
-	) -> poem::Result<Json<Vec<BlockInfo>>> {
+	) -> poem::Result<Json<HashMap<String, QueryInfo>>> {
 		key.validate(self)?;
-		let lists: Vec<_> = self
-			.blocklist
-			.query(&domain)
-			.await
-			.into_iter()
-			.map(|(list, pos)| BlockInfo {
-				list: list.url,
-				domain: domain[pos ..].to_owned(),
-				subdomain: pos != 0
-			})
-			.collect();
+		let lists = self.blocklist.query(&domain).await;
 		Ok(Json(lists))
 	}
 
@@ -162,7 +141,7 @@ impl Api {
 		Ok(Json(Stats {
 			total_request: self.stats.total_request.load(Ordering::Relaxed),
 			blocked_request: self.stats.blocked_request.load(Ordering::Relaxed),
-			blocklist_len: self.blocklist_len.load(Ordering::Relaxed),
+			blocklist_len: self.blocklist.len().await,
 			running_since: self.stats.running_since
 		}))
 	}
@@ -185,8 +164,7 @@ impl Api {
 pub(crate) async fn init(
 	config: Option<Config>,
 	stats: crate::Stats,
-	blocklist: Arc<BlockList>,
-	blocklist_len: Arc<AtomicUsize>
+	blocklist: Arc<BlockList>
 ) -> anyhow::Result<()> {
 	if let Some(config) = config {
 		let address = format!("{}:{}", config.listen, config.port);
@@ -194,7 +172,6 @@ pub(crate) async fn init(
 			blocklist,
 			doc_enable: config.show_doc,
 			stats,
-			blocklist_len,
 			key: config.admin_key
 		};
 		let api_service =

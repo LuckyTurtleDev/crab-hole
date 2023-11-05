@@ -17,7 +17,7 @@ mod parser;
 use anyhow::{bail, Context};
 use async_trait::async_trait;
 use directories::ProjectDirs;
-use log::{debug, info};
+use log::{debug, error, info};
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use rustls::{Certificate, PrivateKey};
@@ -29,13 +29,14 @@ use std::{
 	iter,
 	path::PathBuf,
 	sync::{
-		atomic::{AtomicU64, AtomicUsize, Ordering},
+		atomic::{AtomicU64, Ordering},
 		Arc
 	},
 	time::Duration
 };
 use time::OffsetDateTime;
 use tokio::{
+	fs::{read_to_string, write},
 	net::{TcpListener, UdpSocket},
 	time::sleep,
 	try_join
@@ -131,7 +132,7 @@ struct Handler {
 }
 
 impl Handler {
-	async fn new(config: &Config, stats: Stats, blocklist_len: Arc<AtomicUsize>) -> Self {
+	async fn new(config: &Config, stats: Stats) -> Self {
 		let zone_name = Name::root();
 		let authority = ForwardAuthority::try_from_config(
 			zone_name.clone(),
@@ -145,7 +146,7 @@ impl Handler {
 
 		let blocklist = BlockList::new();
 		blocklist
-			.update(&config.blocklist.lists, true, blocklist_len)
+			.update(&config.blocklist.lists, &config.blocklist.allow_list, true)
 			.await;
 
 		Self {
@@ -168,7 +169,7 @@ impl RequestHandler for Handler {
 		self.stats.total_request.fetch_add(1, Ordering::Relaxed);
 		if self
 			.blocklist
-			.contains(
+			.blocked(
 				lower_query.name().to_string().trim_end_matches('.'),
 				self.include_subdomains
 			)
@@ -239,11 +240,88 @@ async fn load_cert_and_key(
 	Ok((certificates, key))
 }
 
+/// load a text file from url and cache it.
+/// If restore_from_cache is true only the cache is used.
+/// Return None if an Err has occure.
+async fn get_file(url: &Url, restore_from_cache: bool) -> Option<String> {
+	if url.scheme() == "file" {
+		let path = url.path();
+		info!("load file {path:?}");
+		let raw_list = read_to_string(&path).await;
+		match raw_list.with_context(|| format!("can not open file {path:?}")) {
+			Ok(value) => Some(value),
+			Err(err) => {
+				error!("{err:?}");
+				None
+			}
+		}
+	} else {
+		let mut path = url.path().to_owned().replace('/', "-");
+		if !path.is_empty() {
+			path.remove(0);
+		}
+		if let Some(query) = url.query() {
+			path += "--";
+			path += query;
+		}
+		let path = PathBuf::from(&*LIST_DIR).join(path);
+		let raw_list = if !path.exists() || !restore_from_cache {
+			info!("downloading {url}");
+			let resp: anyhow::Result<String> = (|| async {
+				//try block
+				let resp = CLIENT
+					.get(url.to_owned())
+					.send()
+					.await?
+					.error_for_status()?
+					.text()
+					.await?;
+				if let Err(err) = write(&path, &resp)
+					.await
+					.with_context(|| format!("failed to save to {path:?}"))
+				{
+					error!("{err:?}");
+				}
+				Ok(resp)
+			})()
+			.await;
+			match resp.with_context(|| format!("error downloading {url}")) {
+				Ok(value) => Some(value),
+				Err(err) => {
+					error!("{err:?}");
+					None
+				}
+			}
+		} else {
+			None
+		};
+		match raw_list {
+			Some(value) => Some(value),
+			None => {
+				if path.exists() {
+					info!("restore from cache {url}");
+					match read_to_string(&path)
+						.await
+						.with_context(|| format!("error reading file {path:?}"))
+					{
+						Ok(value) => Some(value),
+						Err(err) => {
+							error!("{err:?}");
+							None
+						}
+					}
+				} else {
+					None
+				}
+			},
+		}
+	}
+}
+
 #[tokio::main]
 async fn async_main(config: Config) {
 	let stats = Stats::default();
-	let blocklist_len = Arc::new(AtomicUsize::new(0));
-	let handler = Handler::new(&config, stats.clone(), blocklist_len.clone()).await;
+	let handler = Handler::new(&config, stats.clone()).await;
 	let blocklist = handler.blocklist.clone();
 	let mut server = Server::new(handler);
 	for downstream in config.downstream {
@@ -315,14 +393,12 @@ async fn async_main(config: Config) {
 			}
 		}
 	}
-	let blocklist_len_move = blocklist_len.clone();
 	let blocklist_move = blocklist.clone();
 	tokio::spawn(async move {
 		let blocklist = blocklist_move;
-		let lists = config.blocklist.lists;
 		loop {
 			blocklist
-				.update(&lists, false, blocklist_len_move.clone())
+				.update(&config.blocklist.lists, &config.blocklist.allow_list, false)
 				.await;
 			sleep(Duration::from_secs(7200)).await; //2h
 		}
@@ -336,7 +412,7 @@ async fn async_main(config: Config) {
 				.with_context(|| "failed to start dns server")
 		},
 		async {
-			api::init(config.api, stats, blocklist, blocklist_len.clone())
+			api::init(config.api, stats, blocklist)
 				.await
 				.with_context(|| "failed to start api/web server")
 		}
@@ -349,15 +425,18 @@ async fn async_main(config: Config) {
 struct Config {
 	upstream: ForwardConfig,
 	downstream: Vec<DownstreamConfig>,
+	#[serde(default)]
 	blocklist: BlockConfig,
 	api: Option<api::Config>
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BlockConfig {
 	lists: Vec<Url>,
-	include_subdomains: bool
+	include_subdomains: bool,
+	#[serde(default)]
+	allow_list: Vec<Url>
 }
 
 #[derive(Debug, Deserialize)]

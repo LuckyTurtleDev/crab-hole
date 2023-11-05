@@ -5,8 +5,20 @@ use std::{
 	iter
 };
 
+#[derive(Debug)]
+pub(crate) struct TrieValue {
+	/// domain is blocked if [`BitVec`] contains at least one true
+	/// `true`s in [`BitVec`] are the indices of those lists in `BlockList.list_info`
+	/// that contain the domain.
+	pub(crate) block_source: BitVec,
+	/// domain was manuall allowed.
+	/// Allows have a higher piority than blocks
+	/// I think we do not need track the sources here, since they are regular not many allow lists.
+	pub(crate) allowed: bool
+}
+
 #[derive(Default)]
-pub(crate) struct Trie(QTrie<Vec<u8>, BitVec>);
+pub(crate) struct Trie(QTrie<Vec<u8>, TrieValue>);
 
 impl Debug for Trie {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -16,10 +28,9 @@ impl Debug for Trie {
 			fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 				f.debug_list()
 					.entries(
-						self.0
-							 .0
-							.iter()
-							.map(|(bytes, _)| String::from_utf8_lossy(bytes))
+						self.0 .0.iter().map(|(bytes, value)| {
+							(String::from_utf8_lossy(bytes), value)
+						})
 					)
 					.finish()
 			}
@@ -47,31 +58,36 @@ impl Trie {
 		}
 		let key: Vec<u8> = domain.bytes().rev().collect();
 		let mut index = BitVec::from_elem(list_info_index + 1, false);
+		// We will add more new value than editing existing once.
+		// So we assume that value does not exist first and try to insert a new value first.
 		index.set(list_info_index, true);
-		let old_value = self.0.insert(key.clone(), index);
+		let old_value = self.0.insert(key.clone(), TrieValue {
+			block_source: index,
+			allowed: false
+		});
 		if let Some(mut old_value) = old_value {
 			// if value already exist, we need to add the entry to the existing bitvec
-			was_already_add_by_this_list =
-				old_value.get(list_info_index).is_some_and(|f| f);
-			if list_info_index + 1 > old_value.len() {
-				let grow = list_info_index + 1 - old_value.len();
-				old_value.grow(grow, false);
-				old_value.set(list_info_index, true);
+			was_already_add_by_this_list = old_value
+				.block_source
+				.get(list_info_index)
+				.is_some_and(|f| f);
+			if list_info_index + 1 > old_value.block_source.len() {
+				let grow = list_info_index + 1 - old_value.block_source.len();
+				old_value.block_source.grow(grow, false);
+				old_value.block_source.set(list_info_index, true);
 			}
 			self.0.insert(key, old_value);
 		};
 		was_already_add_by_this_list
 	}
 
-	/// Search for a domain in this trie. Returns `None` if domain was not found in the
-	/// trie. Otherwise it returns a reference to a [`BitVec`], where the position of
-	/// `true`s in [`BitVec`] are the indices of those lists in `BlockList.list_info`
-	/// that contain the domain.
-	pub(crate) fn find(&self, domain: &str, include_subdomains: bool) -> Option<&BitVec> {
+	/// return true if domain is blocked
+	pub(crate) fn blocked(&self, domain: &str, include_subdomains: bool) -> bool {
 		if include_subdomains {
 			let mut key = Vec::new();
 			let mut domain = domain.bytes().rev();
 			let mut sub_trie = self.0.subtrie(&Vec::new());
+			let mut allowed = true;
 			while !sub_trie.is_empty() {
 				for byte in &mut domain {
 					if byte == b'.' {
@@ -80,37 +96,57 @@ impl Trie {
 					key.push(byte);
 				}
 				sub_trie = sub_trie.subtrie(&*key);
-				let index = sub_trie.get(&*key);
-				if index.is_some() {
-					return index;
+				let trie_value = sub_trie.get(&*key);
+				if let Some(trie_value) = trie_value {
+					allowed = trie_value.allowed;
 				}
 				key.push(b'.');
 			}
-			None
+			!allowed
 		} else {
 			let key: Vec<u8> = domain.bytes().rev().collect();
-			self.0.get(&key)
+			self.0.get(&key).is_some_and(|f| !f.allowed)
 		}
 	}
 
-	pub(crate) fn query(&self, domain: &str) -> Vec<(&BitVec, usize)> {
-		// not the fasted way, but it does not slow down the `contains` function
+	/// return all block and allow entrys assiated with `domain` including subdomains
+	pub(crate) fn query(&self, domain: &str) -> Vec<(&TrieValue, usize)> {
+		// not the fasted way, but it does not slow down the `blocked` function
 		// and has no duplicated code
-		let pos_iter =
-			iter::once(0).chain(domain.bytes().enumerate().filter_map(|(i, byte)| {
-				if byte == b'.' {
-					Some(i + 1) // +1 does not panic, if `.` is the last element
-				} else {
-					None
-				}
-			}));
+		let domain: Vec<u8> = domain.bytes().rev().collect();
+		let pos_iter = domain
+			.iter()
+			.enumerate()
+			.filter_map(|(i, byte)| if byte == &b'.' { Some(i) } else { None })
+			.chain(iter::once(domain.len()));
 		let mut hits = Vec::new();
 		for pos in pos_iter {
-			if let Some(index) = self.find(&domain[pos ..], false) {
-				hits.push((index, pos));
+			if let Some(index) = self.0.get(&domain[.. pos]) {
+				hits.push((index, domain.len() - pos)); //order in rev here
 			}
 		}
 		hits
+	}
+
+	/// allow a domain, even it was blocked before.
+	/// After calling this function [`Self::insert()`] should no called anymore at the same trie.
+	pub(crate) fn allow(&mut self, domain: &str, remove_subdoamains: bool) {
+		let mut key: Vec<u8> = domain.bytes().rev().chain(iter::once(b'.')).collect();
+		if remove_subdoamains {
+			for (_, entry) in self.0.iter_prefix_mut(&key) {
+				entry.allowed = true;
+			}
+		}
+		key.pop();
+		if let Some(entry) = self.0.get_mut(&key) {
+			entry.allowed = true;
+		} else {
+			let entry = TrieValue {
+				allowed: true,
+				block_source: BitVec::new()
+			};
+			self.0.insert(key.clone(), entry);
+		}
 	}
 
 	pub(crate) fn shrink_to_fit(&mut self) {}
@@ -127,33 +163,74 @@ mod tests {
 	#[test]
 	fn simple() {
 		let mut tree = Trie::new();
-		assert!(tree.find("example.com", false).is_none());
+		assert!(!tree.blocked("example.com", false));
 		tree.insert("example.com", 0);
-		assert!(tree.find("example.com", false).is_some());
-		assert!(tree.find("xample.com", false).is_none());
-		assert!(tree.find("example.co", false).is_none());
-		assert!(tree.find("eexample.com", false).is_none());
+		assert!(tree.blocked("example.com", false));
+		assert!(!tree.blocked("xample.com", false));
+		assert!(!tree.blocked("example.co", false));
+		assert!(!tree.blocked("eexample.com", false));
 		tree.insert("eexample.com", 0);
-		assert!(tree.find("eexample.com", false).is_some());
+		assert!(tree.blocked("eexample.com", false));
 	}
 
 	#[test]
 	fn sub_domain() {
 		let mut tree = Trie::new();
 		dbg!(&tree);
-		assert!(tree.find("example.com", true).is_none());
+		assert!(!tree.blocked("example.com", true));
 		tree.insert("example.com", 0);
 		dbg!(&tree);
-		assert!(tree.find("example.com", true).is_some());
-		assert!(tree.find("xample.com", true).is_none());
-		assert!(tree.find("example.co", true).is_none());
-		assert!(tree.find("eexample.com", true).is_none());
+		assert!(tree.blocked("example.com", true));
+		assert!(!tree.blocked("xample.com", true));
+		assert!(!tree.blocked("example.co", true));
+		assert!(!tree.blocked("eexample.com", true));
 		tree.insert("eexample.com", 0);
 		dbg!(&tree);
-		assert!(tree.find("eexample.com", true).is_some());
+		assert!(tree.blocked("eexample.com", true));
+		assert!(tree.blocked("foo.example.com", true));
+		assert!(!tree.blocked("foo.example.com", false));
+	}
 
-		assert!(tree.find("foo.example.com", true).is_some());
-		assert!(tree.find("foo.example.com", false).is_none());
+	#[test]
+	fn allow() {
+		let mut tree = Trie::new();
+		tree.insert("example.com", 0);
+		tree.insert("sub.example.com", 0);
+		dbg!(&tree);
+		assert!(tree.blocked("example.com", false));
+		assert!(tree.blocked("sub.example.com", false));
+		tree.allow("example.com", false);
+		dbg!(&tree);
+		assert!(!tree.blocked("example.com", false));
+		assert!(tree.blocked("sub.example.com", false));
+	}
+
+	#[test]
+	fn allow_all_subdomains() {
+		let mut tree = Trie::new();
+		tree.insert("example.com", 0);
+		tree.insert("sub.example.com", 0);
+		dbg!(&tree);
+		assert!(tree.blocked("example.com", false));
+		assert!(tree.blocked("sub.example.com", false));
+		tree.allow("example.com", true);
+		dbg!(&tree);
+		assert!(!tree.blocked("example.com", false));
+		assert!(!tree.blocked("sub.example.com", false));
+	}
+
+	#[test]
+	fn allow_sub_domain() {
+		let mut tree = Trie::new();
+		tree.insert("example.com", 0);
+		tree.insert("sub.example.com", 0);
+		dbg!(&tree);
+		assert!(tree.blocked("example.com", true));
+		assert!(tree.blocked("sub.example.com", true));
+		tree.allow("sub.example.com", true);
+		dbg!(&tree);
+		assert!(tree.blocked("example.com", true));
+		assert!(!tree.blocked("sub.example.com", true));
 	}
 
 	#[cfg(nightly)]
@@ -162,7 +239,7 @@ mod tests {
 		use std::{
 			collections::HashSet,
 			ffi::{c_char, c_void},
-			fs,
+			fs::read_to_string,
 			io::{self, Write as _},
 			ptr::{null, null_mut}
 		};
@@ -189,7 +266,7 @@ mod tests {
 
 		fn load_domains(path: &str) -> Vec<String> {
 			let path = format!("{}/{}", env!("CARGO_MANIFEST_DIR"), path);
-			let raw_list = fs::read_to_string(&path).unwrap();
+			let raw_list = read_to_string(&path).unwrap();
 			let list = crate::parser::Blocklist::parse(&path, &raw_list)
 				.ok()
 				.unwrap();
@@ -221,7 +298,7 @@ mod tests {
 			let domains: HashSet<String> = domains.into_iter().take(1000).collect();
 			b.iter(|| {
 				for domain in &domains {
-					if trie.find(domain, true).is_none() {
+					if !trie.blocked(domain, true) {
 						panic!("this domain should be insert")
 					};
 				}
@@ -240,7 +317,7 @@ mod tests {
 			let miss_domanis = load_domains("/bench/missing-domains.txt");
 			b.iter(|| {
 				for domain in &miss_domanis {
-					trie.find(domain, true);
+					trie.blocked(domain, true);
 				}
 			});
 		}

@@ -1,3 +1,7 @@
+use crate::{
+	blocklist::{BlockList, FailedList, ListType, QueryInfo},
+	CARGO_PKG_NAME, CARGO_PKG_VERSION
+};
 use log::info;
 use poem::{http::StatusCode, listener::TcpListener, Route, Server};
 use poem_openapi::{
@@ -13,11 +17,6 @@ use std::{
 	sync::{atomic::Ordering, Arc}
 };
 use time::OffsetDateTime;
-
-use crate::{
-	blocklist::{BlockList, ListInfo, QueryInfo},
-	CARGO_PKG_NAME, CARGO_PKG_VERSION
-};
 
 #[derive(Debug, Deserialize, Object)]
 #[serde(deny_unknown_fields)]
@@ -84,6 +83,36 @@ struct Api {
 	blocklist: Arc<BlockList>
 }
 
+#[derive(Clone, Debug, poem_openapi::Object)]
+pub(crate) struct OkList {
+	/// count of domains inside this List
+	pub(crate) len: u64,
+	pub(crate) url: String,
+	#[oai(rename = "type")]
+	pub(crate) tipe: ListType
+}
+
+#[derive(Clone, Debug, poem_openapi::Object)]
+/// updating the list has failed.
+/// But an old cached version can still be used
+pub(crate) struct UpdateFailedList {
+	/// count of domains inside this List
+	pub(crate) len: u64,
+	pub(crate) url: String,
+	#[oai(rename = "type")]
+	pub(crate) tipe: ListType,
+	/// eason why loading list failed
+	pub(crate) errors: String
+}
+
+#[derive(Clone, Debug, poem_openapi::Union)]
+#[oai(discriminator_name = "state", rename_all = "lowercase")]
+pub(crate) enum List {
+	Ok(OkList),
+	UpdateFailed(UpdateFailedList),
+	Error(FailedList)
+}
+
 #[OpenApi]
 impl Api {
 	/// provide basic info about the running server
@@ -129,7 +158,7 @@ impl Api {
 
 	/// Return all blocklists.
 	#[oai(path = "/list.json", method = "get")]
-	async fn list(&self, key: Key) -> poem::Result<Json<Vec<ListInfo>>> {
+	async fn list(&self, key: Key) -> poem::Result<Json<Vec<List>>> {
 		key.validate(self)?;
 		Ok(Json(self.blocklist.list().await))
 	}

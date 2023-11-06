@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{get_file, parser, trie::Trie, LIST_DIR};
+use crate::{api, get_file, parser, trie::Trie, LIST_DIR};
 use anyhow::Context;
 use log::{error, info, warn};
 use num_format::{Locale, ToFormattedString};
@@ -10,14 +10,40 @@ use url::Url;
 #[derive(Clone, Debug, poem_openapi::Object)]
 pub(crate) struct ListInfo {
 	/// count of domains inside this List
-	pub(crate) blocked: u64,
-	pub(crate) url: String
+	pub(crate) len: u64,
+	pub(crate) url: String,
+	/// If `Some` the list has partly fail (for example downloading a newer version)
+	/// String stores error messages.
+	pub(crate) errors: Option<String>
+}
+
+#[derive(Clone, Debug, poem_openapi::Enum)]
+#[oai(rename_all = "lowercase")]
+pub(crate) enum ListType {
+	Block,
+	Allow
+}
+
+#[derive(Clone, Debug, poem_openapi::Object)]
+pub(crate) struct FailedList {
+	pub(crate) url: String,
+	#[oai(rename = "type")]
+	pub(crate) tipe: ListType,
+	/// reason why loading list failed
+	pub(crate) errors: String
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct InnerBlockList {
 	trie: Trie,
-	list_info: Vec<ListInfo>
+	/// info about used blocklist.
+	/// To keep `trie` as small as possilble,
+	/// blocked list is stored in its own field.
+	block_list_info: Vec<ListInfo>,
+	/// store list, wich could not be loadedi
+	failed_lists: Vec<FailedList>,
+	/// info about allow list
+	allow_list_info: Vec<ListInfo>
 }
 
 impl InnerBlockList {
@@ -38,6 +64,7 @@ impl BlockList {
 
 	///Clear and update the current Blocklist, to all entries of the list at from `adlist`.
 	///if `use_cache` is set true, cached list, will not be redownloaded (faster init)
+	// TODO: clean this up
 	pub(crate) async fn update(
 		&self,
 		adlist: &Vec<Url>,
@@ -56,31 +83,47 @@ impl BlockList {
 			error!("{err:?}");
 		}
 		let mut trie = Trie::new();
-		let mut list_info = Vec::new();
+		let mut block_list_info = Vec::new();
+		let mut failed_lists = Vec::new();
 
 		// block list
 		for url in adlist {
-			let raw_list = get_file(url, restore_from_cache).await;
+			let (raw_list, mut list_errors) = get_file(url, restore_from_cache).await;
 			match raw_list {
-				None => error!("skipp list {url}"),
+				None => {
+					error!("skipp list {url}");
+					failed_lists.push(FailedList {
+						url: url.as_str().to_owned(),
+						errors: list_errors,
+						tipe: ListType::Block
+					})
+				},
 				Some(raw_list) => {
 					let result = parser::Blocklist::parse(url.as_str(), &raw_list);
 					match result {
 						Err(err) => {
-							error!("parsing Blockist {}", url.as_str());
-							err.print();
+							let msg = err.msg();
+							error!("parsing Blockist {}\n{msg}", url.as_str());
+							list_errors += &msg;
+							failed_lists.push(FailedList {
+								url: url.as_str().to_owned(),
+								errors: list_errors,
+								tipe: ListType::Block
+							})
 						},
 						Ok(list) => {
 							let mut count = 0;
 							for entry in list.entries {
-								if !trie.insert(&entry.domain().0, list_info.len()) {
+								if !trie.insert(&entry.domain().0, block_list_info.len())
+								{
 									// domain was not already add by this list
 									count += 1;
 								}
 							}
-							list_info.push(ListInfo {
-								blocked: count,
-								url: url.as_str().to_owned()
+							block_list_info.push(ListInfo {
+								len: count,
+								url: url.as_str().to_owned(),
+								errors: (!list_errors.is_empty()).then_some(list_errors)
 							});
 						}
 					}
@@ -88,20 +131,31 @@ impl BlockList {
 			}
 		}
 
-		let mut inner_block_list = InnerBlockList { trie, list_info };
+		let mut inner_block_list = InnerBlockList {
+			trie,
+			block_list_info,
+			failed_lists,
+			allow_list_info: Vec::new()
+		};
 
 		// allow list
 		for url in allow_list {
 			info!("load allow list");
-			let raw_list = get_file(url, restore_from_cache).await;
+			let (raw_list, mut list_errors) = get_file(url, restore_from_cache).await;
 			match raw_list {
 				None => error!("skipp list {url}"),
 				Some(raw_list) => {
 					let result = parser::Blocklist::parse(url.as_str(), &raw_list);
 					match result {
 						Err(err) => {
-							error!("parsing allow list {}", url.as_str());
-							err.print();
+							let msg = err.msg();
+							error!("parsing Blockist {}\n{msg}", url.as_str());
+							list_errors += &msg;
+							inner_block_list.failed_lists.push(FailedList {
+								url: url.as_str().to_owned(),
+								errors: list_errors,
+								tipe: ListType::Allow
+							})
 						},
 						Ok(list) => {
 							for entry in list.entries {
@@ -141,8 +195,36 @@ impl BlockList {
 	}
 
 	/// return info about all blocklist
-	pub(crate) async fn list<'a>(&self) -> Vec<ListInfo> {
-		self.rw_lock.read().await.list_info.to_owned()
+	pub(crate) async fn list<'a>(&self) -> Vec<api::List> {
+		let guard = self.rw_lock.read().await;
+		guard
+			.block_list_info
+			.iter()
+			.map(|f| (f, ListType::Block))
+			.chain(guard.allow_list_info.iter().map(|f| (f, ListType::Allow)))
+			.map(|(list, tipe)| {
+				if let Some(errors) = &list.errors {
+					api::List::UpdateFailed(api::UpdateFailedList {
+						len: list.len,
+						url: list.url.to_owned(),
+						errors: errors.to_owned(),
+						tipe
+					})
+				} else {
+					api::List::Ok(api::OkList {
+						len: list.len,
+						url: list.url.to_owned(),
+						tipe
+					})
+				}
+			})
+			.chain(
+				guard
+					.failed_lists
+					.iter()
+					.map(|f| api::List::Error(f.clone()))
+			)
+			.collect()
 	}
 
 	pub(crate) async fn len(&self) -> usize {
@@ -161,7 +243,7 @@ impl BlockList {
 			};
 			for (i, is_in) in trie_value.block_source.iter().enumerate() {
 				if is_in {
-					let list_info = guard.list_info.get(i).unwrap();
+					let list_info = guard.block_list_info.get(i).unwrap();
 					query_info.lists.push(list_info.url.clone());
 				}
 			}

@@ -46,7 +46,8 @@ pub(crate) struct ParseError<'a> {
 	err: Vec<ParserError>
 }
 
-fn report_err(buf: &str, path_str: &str, err: Vec<ParserError>) {
+fn report_err(buf: &str, path_str: &str, err: Vec<ParserError>) -> String {
+	let mut output = Vec::<u8>::new();
 	for e in err {
 		let mut report = Report::build(ReportKind::Error, path_str, e.span().start);
 		match (e.reason(), e.found()) {
@@ -95,14 +96,16 @@ fn report_err(buf: &str, path_str: &str, err: Vec<ParserError>) {
 		};
 		report
 			.finish()
-			.print((path_str, Source::from(buf)))
+			.write((path_str, Source::from(buf)), &mut output)
 			.unwrap();
+		output.push(b'\n');
 	}
+	String::from_utf8_lossy(&output).into_owned()
 }
 
 impl ParseError<'_> {
-	pub(crate) fn print(self) {
-		report_err(self.input, self.path_str, self.err);
+	pub(crate) fn msg(self) -> String {
+		report_err(self.input, self.path_str, self.err)
 	}
 }
 

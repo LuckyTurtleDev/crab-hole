@@ -243,19 +243,20 @@ async fn load_cert_and_key(
 /// load a text file from url and cache it.
 /// If restore_from_cache is true only the cache is used.
 /// Return None if an Err has occure.
-async fn get_file(url: &Url, restore_from_cache: bool) -> Option<String> {
+async fn get_file(url: &Url, restore_from_cache: bool) -> (Option<String>, String) {
 	if url.scheme() == "file" {
 		let path = url.path();
 		info!("load file {path:?}");
 		let raw_list = read_to_string(&path).await;
 		match raw_list.with_context(|| format!("can not open file {path:?}")) {
-			Ok(value) => Some(value),
+			Ok(value) => (Some(value), String::new()),
 			Err(err) => {
-				error!("{err:?}");
-				None
+				error!("{err}");
+				(None, format!("{err}"))
 			}
 		}
 	} else {
+		let mut all_errors = String::new();
 		let mut path = url.path().to_owned().replace('/', "-");
 		if !path.is_empty() {
 			path.remove(0);
@@ -289,6 +290,7 @@ async fn get_file(url: &Url, restore_from_cache: bool) -> Option<String> {
 				Ok(value) => Some(value),
 				Err(err) => {
 					error!("{err:?}");
+					all_errors += &format!("{err}\n");
 					None
 				}
 			}
@@ -296,22 +298,24 @@ async fn get_file(url: &Url, restore_from_cache: bool) -> Option<String> {
 			None
 		};
 		match raw_list {
-			Some(value) => Some(value),
+			Some(value) => (Some(value), all_errors),
 			None => {
 				if path.exists() {
 					info!("restore from cache {url}");
+					all_errors += "restore from cache\n";
 					match read_to_string(&path)
 						.await
 						.with_context(|| format!("error reading file {path:?}"))
 					{
-						Ok(value) => Some(value),
+						Ok(value) => (Some(value), all_errors),
 						Err(err) => {
 							error!("{err:?}");
-							None
+							all_errors += &format!("{err}\n");
+							(None, all_errors)
 						}
 					}
 				} else {
-					None
+					(None, all_errors)
 				}
 			},
 		}

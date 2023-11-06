@@ -194,6 +194,8 @@ impl BlockList {
 			.blocked(domain, include_subdomains)
 	}
 
+	// #################### api helper functions ####################
+
 	/// return info about all blocklist
 	pub(crate) async fn list<'a>(&self) -> Vec<api::List> {
 		let guard = self.rw_lock.read().await;

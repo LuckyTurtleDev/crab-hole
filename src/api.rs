@@ -101,7 +101,7 @@ pub(crate) struct UpdateFailedList {
 	pub(crate) url: String,
 	#[oai(rename = "type")]
 	pub(crate) tipe: ListType,
-	/// eason why loading list failed
+	/// reason why updating list failed
 	pub(crate) errors: String
 }
 

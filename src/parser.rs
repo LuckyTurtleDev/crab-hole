@@ -233,8 +233,7 @@ mod tests {
 		match Blocklist::parse("<test-input>", input) {
 			Ok(blocklist) => blocklist,
 			Err(err) => {
-				err.print();
-				panic!("Failed to parse input");
+				panic!("Failed to parse input\n{}", err.msg());
 			}
 		}
 	}

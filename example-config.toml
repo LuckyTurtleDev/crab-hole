@@ -5,6 +5,8 @@ lists = [
 	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt",
 	"file:///blocked.txt"
 ]
+# allow domains blocked by the blocklist again
+allow_list = ["file:///allowed.txt"]
 
 # optional
 [api]

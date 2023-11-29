@@ -9,7 +9,7 @@ Crab-hole is a cross platform Pi-hole clone written in Rust using [hickory-dns/t
 It can be use as a network wide Ad and spy blocker or run on your local pc.
 
 For a secure and private communication, crab-hole has builtin support for doh(https), doq(quic) and dot(tls) for down- and upstreams and dnssec for upstreams.
-~~It also comes with privacy friendly default logging settings.~~ see https://github.com/LuckyTurtleDev/crab-hole/issues/15
+It also comes with privacy friendly default logging settings.
 
 # Installation: 
 Crab-hole is available at the following repositories:

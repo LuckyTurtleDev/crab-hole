@@ -14,7 +14,7 @@ pub(crate) struct ListInfo {
 	pub(crate) url: String,
 	/// If `Some` the list has partly fail (for example downloading a newer version)
 	/// String stores error messages.
-	pub(crate) errors: Option<String>
+	pub(crate) error: Option<String>
 }
 
 #[derive(Clone, Debug, poem_openapi::Enum)]
@@ -30,7 +30,7 @@ pub(crate) struct FailedList {
 	#[oai(rename = "type")]
 	pub(crate) tipe: ListType,
 	/// reason why loading list failed
-	pub(crate) errors: String
+	pub(crate) error: String
 }
 
 #[derive(Debug, Default)]
@@ -94,7 +94,7 @@ impl BlockList {
 					error!("skipp list {url}");
 					failed_lists.push(FailedList {
 						url: url.as_str().to_owned(),
-						errors: list_errors,
+						error: list_errors,
 						tipe: ListType::Block
 					})
 				},
@@ -107,7 +107,7 @@ impl BlockList {
 							list_errors += &msg;
 							failed_lists.push(FailedList {
 								url: url.as_str().to_owned(),
-								errors: list_errors,
+								error: list_errors,
 								tipe: ListType::Block
 							})
 						},
@@ -123,7 +123,7 @@ impl BlockList {
 							block_list_info.push(ListInfo {
 								len: count,
 								url: url.as_str().to_owned(),
-								errors: (!list_errors.is_empty()).then_some(list_errors)
+								error: (!list_errors.is_empty()).then_some(list_errors)
 							});
 						}
 					}
@@ -153,7 +153,7 @@ impl BlockList {
 							list_errors += &msg;
 							inner_block_list.failed_lists.push(FailedList {
 								url: url.as_str().to_owned(),
-								errors: list_errors,
+								error: list_errors,
 								tipe: ListType::Allow
 							})
 						},
@@ -205,11 +205,11 @@ impl BlockList {
 			.map(|f| (f, ListType::Block))
 			.chain(guard.allow_list_info.iter().map(|f| (f, ListType::Allow)))
 			.map(|(list, tipe)| {
-				if let Some(errors) = &list.errors {
+				if let Some(errors) = &list.error {
 					api::List::UpdateFailed(api::UpdateFailedList {
 						len: list.len,
 						url: list.url.to_owned(),
-						errors: errors.to_owned(),
+						error: errors.to_owned(),
 						tipe
 					})
 				} else {

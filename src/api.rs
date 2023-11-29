@@ -102,7 +102,7 @@ pub(crate) struct UpdateFailedList {
 	#[oai(rename = "type")]
 	pub(crate) tipe: ListType,
 	/// reason why updating list failed
-	pub(crate) errors: String
+	pub(crate) error: String
 }
 
 #[derive(Clone, Debug, poem_openapi::Union)]
@@ -157,8 +157,8 @@ impl Api {
 	}
 
 	/// Return all blocklists.
-	#[oai(path = "/list.json", method = "get")]
-	async fn list(&self, key: Key) -> poem::Result<Json<Vec<List>>> {
+	#[oai(path = "/lists.json", method = "get")]
+	async fn lists(&self, key: Key) -> poem::Result<Json<Vec<List>>> {
 		key.validate(self)?;
 		Ok(Json(self.blocklist.list().await))
 	}

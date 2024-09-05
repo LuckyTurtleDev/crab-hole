@@ -27,7 +27,7 @@ pub(crate) fn init_logger() {
 				if log::max_level() < Level::Debug && mod_path.starts_with("hickory") {
 					let message = format!("{}", record.args());
 					let message = REGEX.replace_all(&message, "RESTRAINED");
-					return writeln!(buf, "{}", message);
+					return writeln!(buf, "{message}");
 				}
 			};
 			writeln!(buf, "{}", record.args())

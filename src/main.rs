@@ -14,7 +14,7 @@ mod api;
 mod logger;
 mod parser;
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use directories::ProjectDirs;
 use log::{debug, error, info};
@@ -27,7 +27,7 @@ use std::{
 	fs::{self, File},
 	io::BufReader,
 	iter,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	sync::{
 		atomic::{AtomicU64, Ordering},
 		Arc
@@ -195,48 +195,52 @@ impl RequestHandler for Handler {
 					header.set_response_code(ResponseCode::ServFail);
 					header.into()
 				});
-		} else {
-			debug!("{lower_query:?}");
 		}
 
+		debug!("{lower_query:?}");
 		self.catalog.handle_request(request, response_handler).await
 	}
 }
 
-async fn load_cert_and_key(
-	cert_path: PathBuf,
-	key_path: PathBuf
+fn reader_for(path: &Path) -> anyhow::Result<BufReader<File>> {
+	Ok(BufReader::new(File::open(path).with_context(|| {
+		format!("Failed to open {}", path.display())
+	})?))
+}
+
+fn load_cert_and_key(
+	cert_path: &Path,
+	key_path: &Path
 ) -> anyhow::Result<(Vec<Certificate>, PrivateKey)> {
-	let certificates: Vec<_> = rustls_pemfile::read_all(&mut BufReader::new(
-		File::open(&cert_path)
-			.with_context(|| format!("failed to open {:?}", cert_path))?
-	))
-	.with_context(|| format!("failed to parse {:?}", cert_path))?
-	.iter()
-	.filter_map(|cert| match cert {
-		rustls_pemfile::Item::X509Certificate(cert) => Some(Certificate(cert.to_owned())),
-		_ => None
-	})
-	.collect();
+	let certificates = rustls_pemfile::read_all(&mut reader_for(cert_path)?)
+		.with_context(|| format!("Failed to parse {}", cert_path.display()))?
+		.iter()
+		.filter_map(|cert| match cert {
+			rustls_pemfile::Item::X509Certificate(cert) => {
+				Some(Certificate(cert.to_owned()))
+			},
+			_ => None
+		})
+		.collect::<Vec<_>>();
 	if certificates.is_empty() {
-		bail!(format!("no x509 certificate found in {:?}", cert_path));
+		bail!("No x509 certificate found in {}", cert_path.display());
 	}
-	let key = rustls_pemfile::read_all(&mut BufReader::new(
-		File::open(&key_path)
-			.with_context(|| format!("failed to open {:?}", key_path))?
-	))
-	.with_context(|| format!("failed to parse {:?}", key_path))?
-	.iter()
-	.find_map(|item| match item {
-		rustls_pemfile::Item::ECKey(key) => Some(key),
-		rustls_pemfile::Item::RSAKey(key) => Some(key),
-		rustls_pemfile::Item::PKCS8Key(key) => Some(key),
-		_ => None
-	})
-	.map(|key| PrivateKey(key.to_owned()))
-	.ok_or_else(|| {
-		anyhow::Error::msg("no private RSA/PKCS8/ECKey key found in {key_path:?}")
-	})?;
+	let key = rustls_pemfile::read_all(&mut reader_for(key_path)?)
+		.with_context(|| format!("Failed to parse {}", key_path.display()))?
+		.iter()
+		.find_map(|item| match item {
+			rustls_pemfile::Item::ECKey(key)
+			| rustls_pemfile::Item::RSAKey(key)
+			| rustls_pemfile::Item::PKCS8Key(key) => Some(key),
+			_ => None
+		})
+		.map(|key| PrivateKey(key.to_owned()))
+		.ok_or_else(|| {
+			anyhow!(
+				"No private RSA/PKCS8/ECKey key found in {}",
+				key_path.display()
+			)
+		})?;
 	Ok((certificates, key))
 }
 
@@ -335,19 +339,18 @@ async fn async_main(config: Config) {
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
 				let udp_socket = UdpSocket::bind(&socket_addr)
 					.await
-					.with_context(|| format!("failed to bind udp socket {}", socket_addr))
+					.with_context(|| format!("failed to bind udp socket {socket_addr}"))
 					.unwrap_or_else(|err| panic!("{err:?}"));
 				server.register_socket(udp_socket);
 			},
 			DownstreamConfig::Tls(downstream) => {
 				let cert_and_key =
-					load_cert_and_key(downstream.certificate, downstream.key)
-						.await
+					load_cert_and_key(&downstream.certificate, &downstream.key)
 						.expect("failed to load certificate or private key");
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
 				let tcp_listener = TcpListener::bind(&socket_addr)
 					.await
-					.with_context(|| format!("failed to bind tcp socket {}", socket_addr))
+					.with_context(|| format!("failed to bind tcp socket {socket_addr}"))
 					.unwrap_or_else(|err| panic!("{err:?}"));
 				server
 					.register_tls_listener(
@@ -355,17 +358,16 @@ async fn async_main(config: Config) {
 						Duration::from_millis(downstream.timeout_ms),
 						cert_and_key
 					)
-					.expect("failed to register tls downstream")
+					.expect("failed to register tls downstream");
 			},
 			DownstreamConfig::Https(downstream) => {
 				let cert_and_key =
-					load_cert_and_key(downstream.certificate, downstream.key)
-						.await
+					load_cert_and_key(&downstream.certificate, &downstream.key)
 						.expect("failed to load certificate or private key");
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
 				let tcp_listener = TcpListener::bind(&socket_addr)
 					.await
-					.with_context(|| format!("failed to bind tcp socket {}", socket_addr))
+					.with_context(|| format!("failed to bind tcp socket {socket_addr}"))
 					.unwrap_or_else(|err| panic!("{err:?}"));
 				server
 					.register_https_listener(
@@ -374,17 +376,16 @@ async fn async_main(config: Config) {
 						cert_and_key,
 						downstream.dns_hostname
 					)
-					.expect("failed to register tls downstream")
+					.expect("failed to register tls downstream");
 			},
 			DownstreamConfig::Quic(downstream) => {
 				let cert_and_key =
-					load_cert_and_key(downstream.certificate, downstream.key)
-						.await
+					load_cert_and_key(&downstream.certificate, &downstream.key)
 						.expect("failed to load certificate or private key");
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
 				let udp_socket = UdpSocket::bind(&socket_addr)
 					.await
-					.with_context(|| format!("failed to bind tcp socket {}", socket_addr))
+					.with_context(|| format!("failed to bind tcp socket {socket_addr}"))
 					.unwrap_or_else(|err| panic!("{err:?}"));
 				server
 					.register_quic_listener(
@@ -393,7 +394,7 @@ async fn async_main(config: Config) {
 						cert_and_key,
 						downstream.dns_hostname
 					)
-					.expect("failed to register tls downstream")
+					.expect("failed to register tls downstream");
 			}
 		}
 	}

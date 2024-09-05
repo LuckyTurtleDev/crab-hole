@@ -238,7 +238,7 @@ impl BlockList {
 	pub(crate) async fn query(&self, domain: &str) -> HashMap<String, QueryInfo> {
 		let guard = self.rw_lock.read().await;
 		let mut hits = HashMap::new();
-		for (trie_value, pos) in guard.trie.query(domain).iter() {
+		for (trie_value, pos) in &guard.trie.query(domain) {
 			let mut query_info = QueryInfo {
 				lists: Vec::new(),
 				allowed: trie_value.allowed

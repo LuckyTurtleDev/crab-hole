@@ -168,9 +168,9 @@ pub(crate) enum Line {
 impl Line {
 	pub(crate) fn domain(&self) -> &Domain {
 		match self {
-			Self::Domain(domain) => domain,
-			Self::IpDomain(_, domain) => domain,
-			Self::IpIfaceDomain(_, _, domain) => domain
+			Self::Domain(domain)
+			| Self::IpDomain(_, domain)
+			| Self::IpIfaceDomain(_, _, domain) => domain
 		}
 	}
 

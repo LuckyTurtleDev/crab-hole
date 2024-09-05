@@ -268,7 +268,7 @@ async fn get_file(url: &Url, restore_from_cache: bool) -> (Option<String>, Strin
 		let path = PathBuf::from(&*LIST_DIR).join(path);
 		let raw_list = if !path.exists() || !restore_from_cache {
 			info!("downloading {url}");
-			let resp: anyhow::Result<String> = (|| async {
+			let resp: anyhow::Result<String> = async {
 				//try block
 				let resp = CLIENT
 					.get(url.to_owned())
@@ -284,7 +284,7 @@ async fn get_file(url: &Url, restore_from_cache: bool) -> (Option<String>, Strin
 					error!("{err:?}");
 				}
 				Ok(resp)
-			})()
+			}
 			.await;
 			match resp.with_context(|| format!("error downloading {url}")) {
 				Ok(value) => Some(value),

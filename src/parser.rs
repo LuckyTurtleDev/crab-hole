@@ -158,6 +158,7 @@ impl Comment {
 	}
 }
 
+#[allow(dead_code)] // these are results from parsing, the types are relevant
 pub(crate) enum Line {
 	Domain(Domain),
 	IpDomain(IpAddr, Domain),

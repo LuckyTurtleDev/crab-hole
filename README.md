@@ -107,7 +107,8 @@ timeout_ms = 3000
 # optional
 [upstream.options]
 # optional (default = false )
-validate = true # use DNSSEC
+# Keep DNSSEC disabled due to Hickory DNS issue, see https://github.com/hickory-dns/hickory-dns/issues/2429
+# validate = true # use DNSSEC
 # see https://docs.rs/trust-dns-resolver/0.23.0/trust_dns_resolver/config/struct.ResolverOpts.html for all options
 
 [[upstream.name_servers]]
@@ -134,3 +135,8 @@ protocol = "tls"
 tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_nx_responses = false
 ```
+
+## DNSSEC Issues
+Due to an upstream issue of [hickory-dns](https://github.com/hickory-dns/hickory-dns/issues/2429), non DNSSEC sites will not be resolved if `validate = true`.
+Only DNSSEC capable sites will be resolved with this setting.
+To prevent this, set `validate = false` or omit the `[upstream.options]`.

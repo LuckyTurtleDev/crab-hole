@@ -134,3 +134,8 @@ protocol = "tls"
 tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_nx_responses = false
 ```
+
+## DNSSEC Issues
+Due to an upstream issue of [hickory-dns](https://github.com/hickory-dns/hickory-dns/issues/2429), non DNSSEC sites will not be resolved if `validate = true`.
+Only DNSSEC capable sites will be resolved with this setting.
+To prevent this, set `validate = false` or omit the `[upstream.options]`.

@@ -107,7 +107,8 @@ timeout_ms = 3000
 # optional
 [upstream.options]
 # optional (default = false )
-validate = true # use DNSSEC
+# Keep DNSSEC disabled due to Hickory DNS issue, see https://github.com/hickory-dns/hickory-dns/issues/2429
+# validate = true # use DNSSEC
 # see https://docs.rs/trust-dns-resolver/0.23.0/trust_dns_resolver/config/struct.ResolverOpts.html for all options
 
 [[upstream.name_servers]]

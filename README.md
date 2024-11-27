@@ -6,13 +6,13 @@
 [![AUR package](https://repology.org/badge/version-for-repo/aur/crab-hole.svg)](https://aur.archlinux.org/packages/crab-hole)
 
 Crab-hole is a cross platform Pi-hole clone written in Rust using [hickory-dns/trust-dns](https://github.com/hickory-dns/hickory-dns).
-It can be use as a network wide Ad and spy blocker or run on your local pc.
+It can be used as a network wide Ad and spy blocker or run on your local pc.
 
 For a secure and private communication, crab-hole has builtin support for doh(https), doq(quic) and dot(tls) for down- and upstreams and dnssec for upstreams.
 It also comes with privacy friendly default logging settings.
 
 # Installation: 
-Crab-hole is available at the following repositories:
+Crab-hole is available in the following repositories:
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/crab-hole.svg)](https://repology.org/project/crab-hole/versions)
 
@@ -20,7 +20,7 @@ Prebuilt binaries can also been downloaded from the [Github release](https://git
 
 
 ### Building from source: 
-Alternatively you can easily build crab-hole by yourself.
+Alternatively you can easily build crab-hole yourself.
 * [Install Rust](https://www.rust-lang.org/tools/install)
 * Run `cargo install crab-hole --locked`
 See the [Rust book](https://doc.rust-lang.org/cargo/commands/cargo-install.html) for more information about cargo install.
@@ -28,7 +28,7 @@ See the [Rust book](https://doc.rust-lang.org/cargo/commands/cargo-install.html)
 
 ### Docker
 A docker image is available at the Github Container Registry.
-Example `docker-compoe.yml`:
+Example `docker-compose.yml`:
 ```yml
 version: '3.3'
 services:

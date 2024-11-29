@@ -136,6 +136,13 @@ tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_nx_responses = false
 ```
 
+## Validation
+The config can be validated by running the following command.
+
+`cargo run -- --validate`
+
+This only validates the config, block- and allowlists, and does not start the DNS server. If the validation fails, the program exits with the error code `1`.
+
 ## DNSSEC Issues
 Due to an upstream issue of [hickory-dns](https://github.com/hickory-dns/hickory-dns/issues/2429), non DNSSEC sites will not be resolved if `validate = true`.
 Only DNSSEC capable sites will be resolved with this setting.

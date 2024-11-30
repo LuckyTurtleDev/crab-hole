@@ -136,6 +136,13 @@ tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_nx_responses = false
 ```
 
+## Syntax check
+To check if the config has a valid syntax, the following command can be used.
+
+`cargo run -- --dry-run`
+
+This loads the config to check for syntax issues, but does not start the DNS server.
+
 ## Validation
 The config can be validated by running the following command.
 

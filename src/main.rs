@@ -501,29 +501,37 @@ fn main() {
 	Lazy::force(&CONFIG_PATH);
 	Lazy::force(&LIST_DIR);
 
-	let config = load_config();
+	let validation = std::env::args().any(|x| x == "--validate");
+	let dry_run = std::env::args().any(|x| x == "--dry-run");
 
-	if std::env::args().any(|x| x == "--validate") {
+	let config = match load_config() {
+		Ok(config) => {
+			debug!("{:#?}", config);
+			config
+		},
+		Err(err) => {
+			error!("{err}");
+			error!("{}", err.root_cause());
+			std::process::exit(1);
+		}
+	};
+
+	if validation {
 		if !async_validate_config(config) {
 			error!("Config validation failed!");
 			std::process::exit(1);
 		}
-	} else {
+	} else if !dry_run {
 		async_main(config);
 	}
 }
 
-fn load_config() -> Config {
+fn load_config() -> Result<Config, anyhow::Error> {
 	info!("load config from {:?}", &*CONFIG_PATH);
 	let config = fs::read(&*CONFIG_PATH)
 		.with_context(|| format!("Failed to read {:?}", CONFIG_PATH.as_path()))
 		.unwrap_or_else(|err| panic!("{err:?}"));
-	let config: Config = toml::from_slice(&config)
-		.with_context(|| "Failed to deserialize config")
-		.unwrap_or_else(|err| panic!("{err:?}"));
-	debug!("{:#?}", config);
-
-	config
+	toml::from_slice(&config).with_context(|| "Failed to deserialize config")
 }
 
 #[tokio::main]

@@ -244,10 +244,16 @@ fn load_cert_and_key(
 	Ok((certificates, key))
 }
 
-/// load a text file from url and cache it.
-/// If restore_from_cache is true only the cache is used.
-/// Return None if an Err has occure.
-async fn get_file(url: &Url, restore_from_cache: bool) -> (Option<String>, String) {
+/// Load a text file from url and cache it.
+/// If restore_from_cache is true, only the cache is used.
+/// The first return value is the file content.
+/// It will be None if an error has occured.
+/// The second value is a combined error message.
+async fn get_file(
+	url: &Url,
+	restore_from_cache: bool,
+	cache_file: bool
+) -> (Option<String>, String) {
 	if url.scheme() == "file" {
 		let path = url.path();
 		info!("load file {path:?}");
@@ -281,11 +287,13 @@ async fn get_file(url: &Url, restore_from_cache: bool) -> (Option<String>, Strin
 					.error_for_status()?
 					.text()
 					.await?;
-				if let Err(err) = write(&path, &resp)
-					.await
-					.with_context(|| format!("failed to save to {path:?}"))
-				{
-					error!("{err:?}");
+				if cache_file {
+					if let Err(err) = write(&path, &resp)
+						.await
+						.with_context(|| format!("failed to save to {path:?}"))
+					{
+						error!("{err:?}");
+					}
 				}
 				Ok(resp)
 			}
@@ -493,15 +501,71 @@ fn main() {
 	Lazy::force(&CONFIG_PATH);
 	Lazy::force(&LIST_DIR);
 
+	let validation = std::env::args().any(|x| x == "--validate");
+	let dry_run = std::env::args().any(|x| x == "--dry-run");
+
+	let config = match load_config() {
+		Ok(config) => {
+			debug!("{:#?}", config);
+			config
+		},
+		Err(err) => {
+			error!("{err}");
+			error!("{}", err.root_cause());
+			std::process::exit(1);
+		}
+	};
+
+	if validation {
+		if !async_validate_config(config) {
+			error!("Config validation failed!");
+			std::process::exit(1);
+		}
+	} else if !dry_run {
+		async_main(config);
+	}
+}
+
+fn load_config() -> Result<Config, anyhow::Error> {
 	info!("load config from {:?}", &*CONFIG_PATH);
 	let config = fs::read(&*CONFIG_PATH)
 		.with_context(|| format!("Failed to read {:?}", CONFIG_PATH.as_path()))
 		.unwrap_or_else(|err| panic!("{err:?}"));
-	let config: Config = toml::from_slice(&config)
-		.with_context(|| "Failed to deserialize config")
-		.unwrap_or_else(|err| panic!("{err:?}"));
-	debug!("{:#?}", config);
-	async_main(config);
+	toml::from_slice(&config).with_context(|| "Failed to deserialize config")
+}
+
+#[tokio::main]
+async fn async_validate_config(config: Config) -> bool {
+	let mut validated = true;
+	//Allow List
+	for list in config.blocklist.allow_list {
+		let (file_content, error_message) = get_file(&list, false, false).await;
+		if let Some(content) = file_content {
+			if let Err(err) = parser::Blocklist::parse(list.path(), &content) {
+				error!("{}", err.msg());
+				validated = false;
+			}
+		} else {
+			error!("{error_message}");
+			validated = false;
+		}
+	}
+
+	//Block List
+	for list in config.blocklist.lists {
+		let (file_content, error_message) = get_file(&list, false, false).await;
+		if let Some(content) = file_content {
+			if let Err(err) = parser::Blocklist::parse(list.path(), &content) {
+				error!("{}", err.msg());
+				validated = false;
+			}
+		} else {
+			error!("{error_message}");
+			validated = false;
+		}
+	}
+
+	validated
 }
 
 #[cfg(test)]

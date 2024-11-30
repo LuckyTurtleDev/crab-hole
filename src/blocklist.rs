@@ -88,7 +88,8 @@ impl BlockList {
 
 		// block list
 		for url in adlist {
-			let (raw_list, mut list_errors) = get_file(url, restore_from_cache).await;
+			let (raw_list, mut list_errors) =
+				get_file(url, restore_from_cache, true).await;
 			match raw_list {
 				None => {
 					error!("skipp list {url}");
@@ -141,7 +142,8 @@ impl BlockList {
 		// allow list
 		for url in allow_list {
 			info!("load allow list");
-			let (raw_list, mut list_errors) = get_file(url, restore_from_cache).await;
+			let (raw_list, mut list_errors) =
+				get_file(url, restore_from_cache, true).await;
 			match raw_list {
 				None => error!("skipp list {url}"),
 				Some(raw_list) => {

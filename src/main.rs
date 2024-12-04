@@ -501,8 +501,8 @@ fn main() {
 	Lazy::force(&CONFIG_PATH);
 	Lazy::force(&LIST_DIR);
 
-	let validation = std::env::args().any(|x| x == "--validate");
-	let dry_run = std::env::args().any(|x| x == "--dry-run");
+	let validate_lists = std::env::args().any(|x| x == "--validate-lists");
+	let validate_config = std::env::args().any(|x| x == "--validate-config");
 
 	let config = match load_config() {
 		Ok(config) => {
@@ -516,12 +516,12 @@ fn main() {
 		}
 	};
 
-	if validation {
-		if !async_validate_config(config) {
+	if validate_lists {
+		if !async_validate_lists(config) {
 			error!("Config validation failed!");
 			std::process::exit(1);
 		}
-	} else if !dry_run {
+	} else if !validate_config {
 		async_main(config);
 	}
 }
@@ -535,7 +535,7 @@ fn load_config() -> Result<Config, anyhow::Error> {
 }
 
 #[tokio::main]
-async fn async_validate_config(config: Config) -> bool {
+async fn async_validate_lists(config: Config) -> bool {
 	let mut validated = true;
 	//Allow List
 	for list in config.blocklist.allow_list {

@@ -139,14 +139,14 @@ trust_nx_responses = false
 ## Syntax check
 To check if the config has a valid syntax, the following command can be used.
 
-`cargo run -- --dry-run`
+`crab-hole --validate-config`
 
 This loads the config to check for syntax issues, but does not start the DNS server.
 
 ## Validation
-The config can be validated by running the following command.
+The config and blocklists can be validated by running the following command.
 
-`cargo run -- --validate`
+`crab-hole --validate-lists`
 
 This only validates the config, block- and allowlists, and does not start the DNS server. If the validation fails, the program exits with the error code `1`.
 

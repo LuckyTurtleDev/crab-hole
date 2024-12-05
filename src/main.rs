@@ -53,6 +53,8 @@ use trust_dns_server::{
 };
 use url::Url;
 
+use clap::{Parser, Subcommand};
+
 const CARGO_PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -495,14 +497,27 @@ struct HttpsAndQuicConfig {
 	dns_hostname: Option<String>
 }
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+#[command(propagate_version = true)]
+struct Cli {
+	#[command(subcommand)]
+	command: Option<Commands>
+}
+
+#[derive(Subcommand)]
+enum Commands {
+	ValidateConfig,
+	ValidateLists
+}
+
 fn main() {
 	init_logger();
 	info!("🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
 	Lazy::force(&CONFIG_PATH);
 	Lazy::force(&LIST_DIR);
 
-	let validate_lists = std::env::args().any(|x| x == "--validate-lists");
-	let validate_config = std::env::args().any(|x| x == "--validate-config");
+	let cli = Cli::parse();
 
 	let config = match load_config() {
 		Ok(config) => {
@@ -516,13 +531,17 @@ fn main() {
 		}
 	};
 
-	if validate_lists {
-		if !async_validate_lists(config) {
-			error!("Config validation failed!");
-			std::process::exit(1);
-		}
-	} else if !validate_config {
-		async_main(config);
+	match cli.command {
+		Some(command) => match command {
+			Commands::ValidateConfig => (),
+			Commands::ValidateLists => {
+				if !async_validate_lists(config) {
+					error!("Config validation failed!");
+					std::process::exit(1);
+				}
+			},
+		},
+		None => async_main(config)
 	}
 }
 

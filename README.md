@@ -136,17 +136,22 @@ tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_nx_responses = false
 ```
 
+## Starting the Server
+To start the server just execute the binary without any subcommands.
+
+`crab-hole`
+
 ## Syntax check
 To check if the config has a valid syntax, the following command can be used.
 
-`crab-hole --validate-config`
+`crab-hole validate-config`
 
 This loads the config to check for syntax issues, but does not start the DNS server.
 
 ## Validation
 The config and blocklists can be validated by running the following command.
 
-`crab-hole --validate-lists`
+`crab-hole validate-lists`
 
 This only validates the config, block- and allowlists, and does not start the DNS server. If the validation fails, the program exits with the error code `1`.
 

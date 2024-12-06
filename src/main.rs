@@ -533,11 +533,13 @@ fn main() {
 
 	match cli.command {
 		Some(command) => match command {
-			Commands::ValidateConfig => (),
+			Commands::ValidateConfig => info!("Config is valid"),
 			Commands::ValidateLists => {
 				if !async_validate_lists(config) {
 					error!("Config validation failed!");
 					std::process::exit(1);
+				} else {
+					info!("All lists are valid");
 				}
 			},
 		},

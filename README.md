@@ -106,10 +106,10 @@ timeout_ms = 3000
 
 # optional
 [upstream.options]
-# optional (default = false )
+# optional (default = false)
 # Keep DNSSEC disabled due to Hickory DNS issue, see https://github.com/hickory-dns/hickory-dns/issues/2429
 # validate = true # use DNSSEC
-# see https://docs.rs/hickory-resolver/0.24/hickory_resolver/config/struct.ResolverOpts.html
+# see https://docs.rs/hickory-resolver/0.24/hickory_resolver/config/struct.ResolverOpts.html for all options
 
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1111]:853"

@@ -1,6 +1,6 @@
 [package]
 name = "crab-hole"
-version = "0.1.10"
+version = "0.1.11"
 edition = "2021"
 description = "Pi-Hole clone written in rust using hickory-dns/trust-dns"
 repository = "https://github.com/LuckyTurtleDev/crab-hole"

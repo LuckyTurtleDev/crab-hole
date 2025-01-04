@@ -56,3 +56,7 @@ jemalloc-sys = { version = "0.5", features = ["stats"] }
 
 [build-dependencies]
 rustc_version = "0.4.0"
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(nightly)']

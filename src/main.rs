@@ -17,6 +17,16 @@ mod parser;
 use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use directories::ProjectDirs;
+use hickory_proto::{
+	op::{header::Header, response_code::ResponseCode},
+	rr::Name
+};
+use hickory_server::{
+	authority::{Catalog, MessageResponseBuilder, ZoneType},
+	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
+	store::forwarder::{ForwardAuthority, ForwardConfig},
+	ServerFuture as Server
+};
 use log::{debug, error, info};
 use once_cell::sync::Lazy;
 use reqwest::Client;
@@ -40,16 +50,6 @@ use tokio::{
 	net::{TcpListener, UdpSocket},
 	time::sleep,
 	try_join
-};
-use trust_dns_proto::{
-	op::{header::Header, response_code::ResponseCode},
-	rr::Name
-};
-use trust_dns_server::{
-	authority::{Catalog, MessageResponseBuilder, ZoneType},
-	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
-	store::forwarder::{ForwardAuthority, ForwardConfig},
-	ServerFuture as Server
 };
 use url::Url;
 

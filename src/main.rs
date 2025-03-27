@@ -10,9 +10,6 @@ extern crate test;
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-#[cfg(all(feature = "ring", feature = "aws-lc-rs"))]
-compile_error! {"Feature \"ring\" and  feature \"aws-lc-rs\" cannot be enabled at the same time."}
-
 mod api;
 mod logger;
 mod parser;
@@ -30,7 +27,7 @@ use hickory_server::{
 	store::forwarder::{ForwardAuthority, ForwardConfig},
 	ServerFuture as Server
 };
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use rustls::{
@@ -173,10 +170,7 @@ impl RequestHandler for Handler {
 		mut response_handler: R
 	) -> ResponseInfo {
 		let Ok(lower_query) = request.request_info().map(|v| v.query) else {
-			debug!(
-				"Failed to get request info from request with id {}",
-				request.id()
-			);
+			warn!("Multiple questions in one dns query is currently unsupported");
 			return response_handler
 				.send_response(
 					MessageResponseBuilder::from_message_request(request)
@@ -237,11 +231,10 @@ fn load_cert_and_key(
 ) -> anyhow::Result<Arc<impl ResolvesServerCert>> {
 	let certificates = rustls_pemfile::certs(&mut reader_for(cert_path)?)
 		.filter_map(|cert| {
-			match cert.with_context(|| format!("Failed to parse {}", cert_path.display()))
-			{
-				Ok(s) => Some(s),
-				Err(_) => None
+			if let Err(err) = &cert {
+				warn!("Failed to parse {}: {}", cert_path.display(), err)
 			}
+			cert.ok()
 		})
 		.collect::<Vec<_>>();
 	if certificates.is_empty() {
@@ -259,9 +252,8 @@ fn load_cert_and_key(
 	let certified_key = CertifiedKey::from_der(
 		certificates,
 		key,
-		CryptoProvider::get_default().ok_or_else(|| {
-			anyhow!("CryptoProvider default should have been registered in main!")
-		})?
+		CryptoProvider::get_default()
+			.expect("CryptoProvider default should have been registered in main!")
 	)?;
 	Ok(Arc::new(SingleCertAndKey::from(certified_key)))
 }
@@ -556,7 +548,7 @@ fn main() {
 	Lazy::force(&CONFIG_PATH);
 	Lazy::force(&LIST_DIR);
 
-	#[cfg(feature = "ring")]
+	#[cfg(all(feature = "ring", not(feature = "aws-lc-rs")))]
 	let key_provider = rustls::crypto::ring::default_provider();
 	#[cfg(feature = "aws-lc-rs")]
 	let key_provider = rustls::crypto::aws_lc_rs::default_provider();

@@ -548,10 +548,10 @@ fn main() {
 	Lazy::force(&CONFIG_PATH);
 	Lazy::force(&LIST_DIR);
 
-	#[cfg(all(feature = "ring", not(feature = "aws-lc-rs")))]
-	let key_provider = rustls::crypto::ring::default_provider();
-	#[cfg(feature = "aws-lc-rs")]
+	#[cfg(all(feature = "aws-lc-rs", not(feature = "ring")))]
 	let key_provider = rustls::crypto::aws_lc_rs::default_provider();
+	#[cfg(feature = "ring")]
+	let key_provider = rustls::crypto::ring::default_provider();
 	CryptoProvider::install_default(key_provider).unwrap_or_else(|_| {
 		error!("Failed to install default crypto provider.");
 		std::process::exit(1);

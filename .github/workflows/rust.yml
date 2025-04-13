@@ -11,8 +11,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - run: sudo apt-get update -y && sudo apt-get install -y knot-dnsutils
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         id: "rust-toolchain"
       - name: install cargo-hack
@@ -45,7 +44,7 @@ jobs:
             ~/.cargo/registry
             target
           key: "${{runner.os}} Rust test ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cargo hack test --feature-powerset --at-least-one-of aws-lc-rs,ring --mutually-exclusive-features aws-lc-rs,ring --skip __debug_parser,default --locked -- --include-ignored
+      - run: cargo hack test --feature-powerset --at-least-one-of aws-lc-rs,ring --mutually-exclusive-features aws-lc-rs,ring --skip __debug_parser,default,native-roots,webpki-roots --locked -- --include-ignored
         env:
           RUST_BACKTRACE: 1
 

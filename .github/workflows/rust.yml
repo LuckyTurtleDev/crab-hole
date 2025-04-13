@@ -130,17 +130,19 @@ jobs:
             if [[ "${{ matrix.target }}" == *musl* ]]
             then
               sudo apt install -y --no-install-recommends musl-dev
-              envs+=("CFLAGS_${{ matrix.target }}=-isystem /usr/include/x86_64-linux-musl/")
-              envs+=("CXXFLAGS_${{ matrix.target }}=-isystem /usr/include/x86_64-linux-musl/")
+              envs+=("CFLAGS_${{ matrix.target }}=-isystem /usr/include/x86_64-linux-musl/ -fuse-ld=lld")
+              envs+=("CXXFLAGS_${{ matrix.target }}=-isystem /usr/include/x86_64-linux-musl/ -fuse-ld=lld")
               envs+=("CARGO_PROFILE_RELEASE_OPT_LEVEL=s" "CARGO_PROFILE_RELEASE_PANIC=abort") # portable binary - optimise size
               envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=lld -Clink-arg=--target=${{ matrix.target }}")
             else
+              envs+=("CFLAGS_${{ matrix.target }}=-fuse-ld=lld")
+              envs+=("CXXFLAGS_${{ matrix.target }}=-fuse-ld=lld")
               envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=lld")
             fi
             envs+=("CC=clang")
-            envs+=("CC_${{ matrix.target }}=clang -target ${{ matrix.target }}")
+            envs+=("CC_${{ matrix.target }}=clang}")
             envs+=("CXX=clang++")
-            envs+=("CXX_${{ matrix.target }}=clang++ -target ${{ matrix.target }}")
+            envs+=("CXX_${{ matrix.target }}=clang++")
           fi
           env "${envs[@]}" \
           cargo auditable build -v --release --locked --no-default-features --features aws-lc-rs,${{ matrix.roots }} --target ${{ matrix.target }}

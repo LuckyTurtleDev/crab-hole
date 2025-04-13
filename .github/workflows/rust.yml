@@ -130,6 +130,8 @@ jobs:
             if [[ "${{ matrix.target }}" == *musl* ]]
             then
               sudo apt install -y --no-install-recommends musl-dev
+              envs+=("CFLAGS_${{ matrix.target }}=-isystem /usr/include/x86_64-linux-musl/")
+              envs+=("CXXFLAGS_${{ matrix.target }}=-isystem /usr/include/x86_64-linux-musl/")
             fi
             envs+=("CC=clang")
             envs+=("CC_${{ matrix.target }}=clang -target ${{ matrix.target }}")

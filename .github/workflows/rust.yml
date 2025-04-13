@@ -23,7 +23,7 @@ jobs:
             ~/.cargo/registry
             target
           key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cargo hack test --feature-powerset --at-least-one-of aws-lc-rs,ring --locked -- --include-ignored
+      - run: cargo hack test --feature-powerset --at-least-one-of aws-lc-rs,ring --mutually-exclusive-features aws-lc-rs,ring --locked -- --include-ignored
         env:
           RUST_BACKTRACE: 1
 

@@ -140,7 +140,7 @@ jobs:
               envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=lld")
             fi
             envs+=("CC=clang")
-            envs+=("CC_${{ matrix.target }}=clang}")
+            envs+=("CC_${{ matrix.target }}=clang")
             envs+=("CXX=clang++")
             envs+=("CXX_${{ matrix.target }}=clang++")
           fi

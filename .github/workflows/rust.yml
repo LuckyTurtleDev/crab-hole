@@ -91,7 +91,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [i686-unknown-linux-musl, x86_64-unknown-linux-musl, arm-unknown-linux-musleabihf, armv7-unknown-linux-musleabihf, aarch64-unknown-linux-musl,   x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, x86_64-pc-windows-gnu]
+        target: 
+          - aarch64-unknown-linux-musl
+          - aarch64-unknown-linux-gnu
+          - arm-unknown-linux-musleabihf
+          - armv7-unknown-linux-musleabihf
+          - i686-unknown-linux-musl
+          - x86_64-pc-windows-gnu
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
         roots: [native-roots, webpki-roots]
     name: ${{ matrix.target }}--${{ matrix.roots }}
     runs-on: ubuntu-latest
@@ -99,11 +107,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        id: "rust-toolchain"
-      - name: install cross
-        uses: baptiste0928/cargo-install@v2
         with:
-          crate: cross
+          targets: ${{ matrix.target }}
+        id: "rust-toolchain"
+      - name: install cargo-auditable
+        uses: taiki-e/install-action@cargo-auditable
       - uses: actions/cache@v4
         with:
           path: |
@@ -111,10 +119,22 @@ jobs:
             ~/.cargo/registry
             target
           key: "${{runner.os}} Target ${{ matrix.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cross build --release --locked --no-default-features --features aws-lc-rs,${{ matrix.roots }} --target ${{ matrix.target }}
-        env:
-          RUST_BACKTRACE: 1
-      - run: tree
+      - run: |
+          sudo apt update -y
+          sudo apt install -y --no-install-recommends bindgen
+          envs=("RUST_BACKTRACE=1" "CARGO_PROFILE_RELEASE_LTO=true")
+          if [[ "${{ matrix.target }}" == *windows* ]]
+          then
+            sudo apt install -y --no-install-recommends mingw-w64
+          else
+            envs+="CC=clang"
+            envs+="CC_${{ matrix.target }}=clang -target ${{ matrix.target }}"
+            envs+="CXX=clang++"
+            envs+="CXX_${{ matrix.target }}=clang++ -target ${{ matrix.target }}"
+          fi
+          env "${envs[@]}" \
+          cargo auditable build --release --locked --no-default-features --features aws-lc-rs,${{ matrix.roots }} --target ${{ matrix.target }}
+          tree
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v4
         with:

@@ -118,7 +118,8 @@ jobs:
             ~/.cargo/registry
             target
           key: "${{runner.os}} Target ${{ matrix.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: |
+      - name: Build crab-hole
+        run: |
           sudo apt update -y
           sudo apt install -y --no-install-recommends bindgen
           envs=("RUST_BACKTRACE=1" "CARGO_PROFILE_RELEASE_LTO=true")
@@ -134,6 +135,7 @@ jobs:
           env "${envs[@]}" \
           cargo auditable build --release --locked --no-default-features --features aws-lc-rs,${{ matrix.roots }} --target ${{ matrix.target }}
           tree
+        shell: bash --noprofile --norc -exo pipefail {0}
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v4
         with:

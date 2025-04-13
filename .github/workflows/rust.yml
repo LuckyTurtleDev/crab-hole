@@ -125,8 +125,12 @@ jobs:
           envs=("RUST_BACKTRACE=1" "CARGO_PROFILE_RELEASE_LTO=true")
           if [[ "${{ matrix.target }}" == *windows* ]]
           then
-            sudo apt install -y --no-install-recommends mingw-w64
+            sudo apt install -y --no-install-recommends mingw-w64 nasm
           else
+            if [[ "${{ matrix.target }}" == *musl* ]]
+            then
+              sudo apt install -y --no-install-recommends musl-dev
+            fi
             envs+=("CC=clang")
             envs+=("CC_${{ matrix.target }}=clang -target ${{ matrix.target }}")
             envs+=("CXX=clang++")

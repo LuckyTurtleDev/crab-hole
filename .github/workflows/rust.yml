@@ -127,10 +127,10 @@ jobs:
           then
             sudo apt install -y --no-install-recommends mingw-w64
           else
-            envs+="CC=clang"
-            envs+="CC_${{ matrix.target }}=clang -target ${{ matrix.target }}"
-            envs+="CXX=clang++"
-            envs+="CXX_${{ matrix.target }}=clang++ -target ${{ matrix.target }}"
+            envs+=("CC=clang")
+            envs+=("CC_${{ matrix.target }}=clang -target ${{ matrix.target }}")
+            envs+=("CXX=clang++")
+            envs+=("CXX_${{ matrix.target }}=clang++ -target ${{ matrix.target }}")
           fi
           env "${envs[@]}" \
           cargo auditable build --release --locked --no-default-features --features aws-lc-rs,${{ matrix.roots }} --target ${{ matrix.target }}

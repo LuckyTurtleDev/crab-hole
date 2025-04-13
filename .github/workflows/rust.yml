@@ -28,7 +28,6 @@ jobs:
           RUST_BACKTRACE: 1
 
   test:
-    needs: [check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

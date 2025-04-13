@@ -14,10 +14,8 @@ jobs:
       - run: sudo apt-get update -y && sudo apt-get install -y knot-dnsutils
       - uses: dtolnay/rust-toolchain@stable
         id: "rust-toolchain"
-      - name: install cargo-all-features
-        uses: baptiste0928/cargo-install@v2
-        with:
-          crate: cargo-all-features
+      - name: install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
       - uses: actions/cache@v3
         with:
           path: |
@@ -25,7 +23,7 @@ jobs:
             ~/.cargo/registry
             target
           key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cargo test-all-features --locked -- --include-ignored
+      - run: cargo hack test --feature-powerset --at-least-one-of aws-lc-rs,ring --locked -- --include-ignored
         env:
           RUST_BACKTRACE: 1
 

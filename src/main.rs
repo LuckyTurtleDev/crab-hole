@@ -22,15 +22,19 @@ use hickory_proto::{
 	rr::Name
 };
 use hickory_server::{
-	authority::{Catalog, MessageResponseBuilder, ZoneType},
+	authority::{Catalog, MessageResponseBuilder},
 	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 	store::forwarder::{ForwardAuthority, ForwardConfig},
 	ServerFuture as Server
 };
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
 use reqwest::Client;
-use rustls::{Certificate, PrivateKey};
+use rustls::{
+	crypto::CryptoProvider,
+	server::ResolvesServerCert,
+	sign::{CertifiedKey, SingleCertAndKey}
+};
 use serde::Deserialize;
 use std::{
 	env::var,
@@ -42,7 +46,8 @@ use std::{
 		atomic::{AtomicU64, Ordering},
 		Arc
 	},
-	time::Duration
+	time::Duration,
+	vec
 };
 use time::OffsetDateTime;
 use tokio::{
@@ -136,15 +141,12 @@ struct Handler {
 impl Handler {
 	async fn new(config: &Config, stats: Stats) -> Self {
 		let zone_name = Name::root();
-		let authority = ForwardAuthority::try_from_config(
-			zone_name.clone(),
-			ZoneType::Forward,
-			&config.upstream
-		)
-		.expect("Failed to create forwarder");
+		let authority = ForwardAuthority::builder_tokio(config.upstream.clone())
+			.build()
+			.expect("Failed to create forwarder");
 
 		let mut catalog = Catalog::new();
-		catalog.upsert(zone_name.into(), Box::new(Arc::new(authority)));
+		catalog.upsert(zone_name.into(), vec![Arc::new(authority)]);
 
 		let blocklist = BlockList::new();
 		blocklist
@@ -167,7 +169,20 @@ impl RequestHandler for Handler {
 		request: &Request,
 		mut response_handler: R
 	) -> ResponseInfo {
-		let lower_query = request.request_info().query;
+		let Ok(lower_query) = request.request_info().map(|v| v.query) else {
+			warn!("Multiple questions in one dns query is currently unsupported");
+			return response_handler
+				.send_response(
+					MessageResponseBuilder::from_message_request(request)
+						.error_msg(request.header(), ResponseCode::ServFail)
+				)
+				.await
+				.unwrap_or_else(|_| {
+					let mut header = Header::new();
+					header.set_response_code(ResponseCode::ServFail);
+					header.into()
+				});
+		};
 		self.stats.total_request.fetch_add(1, Ordering::Relaxed);
 		if self
 			.blocklist
@@ -213,37 +228,34 @@ fn reader_for(path: &Path) -> anyhow::Result<BufReader<File>> {
 fn load_cert_and_key(
 	cert_path: &Path,
 	key_path: &Path
-) -> anyhow::Result<(Vec<Certificate>, PrivateKey)> {
-	let certificates = rustls_pemfile::read_all(&mut reader_for(cert_path)?)
-		.with_context(|| format!("Failed to parse {}", cert_path.display()))?
-		.iter()
-		.filter_map(|cert| match cert {
-			rustls_pemfile::Item::X509Certificate(cert) => {
-				Some(Certificate(cert.to_owned()))
-			},
-			_ => None
+) -> anyhow::Result<Arc<impl ResolvesServerCert>> {
+	let certificates = rustls_pemfile::certs(&mut reader_for(cert_path)?)
+		.filter_map(|cert| {
+			if let Err(err) = &cert {
+				warn!("Failed to parse {}: {}", cert_path.display(), err)
+			}
+			cert.ok()
 		})
 		.collect::<Vec<_>>();
 	if certificates.is_empty() {
 		bail!("No x509 certificate found in {}", cert_path.display());
 	}
-	let key = rustls_pemfile::read_all(&mut reader_for(key_path)?)
+	let key = rustls_pemfile::private_key(&mut reader_for(key_path)?)
 		.with_context(|| format!("Failed to parse {}", key_path.display()))?
-		.iter()
-		.find_map(|item| match item {
-			rustls_pemfile::Item::ECKey(key)
-			| rustls_pemfile::Item::RSAKey(key)
-			| rustls_pemfile::Item::PKCS8Key(key) => Some(key),
-			_ => None
-		})
-		.map(|key| PrivateKey(key.to_owned()))
 		.ok_or_else(|| {
 			anyhow!(
 				"No private RSA/PKCS8/ECKey key found in {}",
 				key_path.display()
 			)
 		})?;
-	Ok((certificates, key))
+
+	let certified_key = CertifiedKey::from_der(
+		certificates,
+		key,
+		CryptoProvider::get_default()
+			.expect("CryptoProvider default should have been registered in main!")
+	)?;
+	Ok(Arc::new(SingleCertAndKey::from(certified_key)))
 }
 
 /// Load a text file from url and cache it.
@@ -384,7 +396,8 @@ async fn async_main(config: Config) {
 						tcp_listener,
 						Duration::from_millis(downstream.timeout_ms),
 						cert_and_key,
-						downstream.dns_hostname
+						downstream.dns_hostname,
+						downstream.http_endpoint
 					)
 					.expect("failed to register tls downstream");
 			},
@@ -459,12 +472,16 @@ struct BlockConfig {
 enum DownstreamConfig {
 	Udp(UdpConfig),
 	Tls(TlsConfig),
-	Https(HttpsAndQuicConfig),
-	Quic(HttpsAndQuicConfig)
+	Https(HttpsConfig),
+	Quic(QuicConfig)
 }
 
 fn default_timeout() -> u64 {
 	3000
+}
+
+fn default_http_endpoint() -> String {
+	"/dns-query".into()
 }
 
 #[derive(Debug, Deserialize)]
@@ -487,7 +504,7 @@ struct TlsConfig {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct HttpsAndQuicConfig {
+struct QuicConfig {
 	port: u16,
 	listen: String,
 	certificate: PathBuf,
@@ -495,6 +512,20 @@ struct HttpsAndQuicConfig {
 	#[serde(default = "default_timeout")]
 	timeout_ms: u64,
 	dns_hostname: Option<String>
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HttpsConfig {
+	port: u16,
+	listen: String,
+	certificate: PathBuf,
+	key: PathBuf,
+	#[serde(default = "default_timeout")]
+	timeout_ms: u64,
+	dns_hostname: Option<String>,
+	#[serde(default = "default_http_endpoint")]
+	http_endpoint: String
 }
 
 #[derive(Parser)]
@@ -516,6 +547,15 @@ fn main() {
 	info!("🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
 	Lazy::force(&CONFIG_PATH);
 	Lazy::force(&LIST_DIR);
+
+	#[cfg(all(feature = "aws-lc-rs", not(feature = "ring")))]
+	let key_provider = rustls::crypto::aws_lc_rs::default_provider();
+	#[cfg(feature = "ring")]
+	let key_provider = rustls::crypto::ring::default_provider();
+	CryptoProvider::install_default(key_provider).unwrap_or_else(|_| {
+		error!("Failed to install default crypto provider.");
+		std::process::exit(1);
+	});
 
 	let cli = Cli::parse();
 

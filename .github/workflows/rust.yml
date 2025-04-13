@@ -96,7 +96,7 @@ jobs:
           RUST_BACKTRACE: 1
       - run: tree
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: "${{ matrix.target }}--${{ matrix.roots }}"
           path: |
@@ -126,7 +126,7 @@ jobs:
         env:
           RUST_BACKTRACE: 1
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: "x86_64-apple-darwin--${{ matrix.roots }}"
           path: target/release/crab-hole
@@ -137,7 +137,7 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
         path: github_artifacts
     - name: docker

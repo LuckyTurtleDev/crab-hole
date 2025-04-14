@@ -104,6 +104,10 @@ jobs:
         uses: baptiste0928/cargo-install@v2
         with:
           crate: cross
+      - name: install bindgen-cli
+        uses: baptiste0928/cargo-install@v2
+        with:
+          crate: bindgen-cli
       - uses: actions/cache@v4
         with:
           path: |

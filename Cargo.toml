@@ -66,7 +66,7 @@ check-cfg = ['cfg(nightly)']
 
 
 
-[workspace.metadata.cross]
+[workspace.metadata.cross.target.armv7-unknown-linux-musleabihf]
 pre-build = [
     "apt-get update && apt-get --assume-yes install bindgen"
 ]

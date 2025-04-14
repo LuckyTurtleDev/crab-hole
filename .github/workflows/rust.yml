@@ -163,8 +163,8 @@ jobs:
             envs+=("CC_${{ matrix.target.target }}=clang")
             envs+=("CXX=clang++")
             envs+=("CXX_${{ matrix.target.target }}=clang++")
-            envs+=("CFLAGS_${{ matrix.target.target }}=-isystem ${{ matrix.target.include }} -L ${{ matrix.target.libdir }} -fuse-ld=lld -Wl,-L -Wl,${{matrix.target.libdir}}")
-            envs+=("CXXFLAGS_${{ matrix.target.target }}=-isystem ${{ matrix.target.include }} -L ${{ matrix.target.libdir }} -fuse-ld=lld -Wl,-L -Wl,${{matrix.target.libdir}}")
+            envs+=("CFLAGS_${{ matrix.target.target }}=-v -isystem ${{ matrix.target.include }} -L ${{ matrix.target.libdir }} -fuse-ld=lld -Wl,-L -Wl,${{matrix.target.libdir}}")
+            envs+=("CXXFLAGS_${{ matrix.target.target }}=-v -isystem ${{ matrix.target.include }} -L ${{ matrix.target.libdir }} -fuse-ld=lld -Wl,-L -Wl,${{matrix.target.libdir}}")
             envs+=("AWS_LC_SYS_INCLUDES=${{ matrix.target.include }}")
             envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=lld -C link-arg=--target=${{ matrix.target.target }} -C link-arg=-L -C link-arg=${{ matrix.target.libdir }}")
             if [[ "${{ matrix.target.target }}" == *musl* ]]; then

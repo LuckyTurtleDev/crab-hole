@@ -91,14 +91,41 @@ jobs:
       fail-fast: false
       matrix:
         target: 
-          - aarch64-unknown-linux-musl
-          - aarch64-unknown-linux-gnu
-          - arm-unknown-linux-musleabihf
-          - armv7-unknown-linux-musleabihf
-          - i686-unknown-linux-musl
-          - x86_64-pc-windows-gnu
-          - x86_64-unknown-linux-gnu
-          - x86_64-unknown-linux-musl
+          - target: aarch64-unknown-linux-musl
+            dpkg_arch: arm64
+            dpkg_libc: musl-dev
+            include: /usr/include/aarch64-linux-musl
+            libdir: /usr/lib/aarch64-linux-musl
+          - target: aarch64-unknown-linux-gnu
+            dpkg_arch:
+            dpkg_libc: libc6-dev-arm64-cross
+            include: /usr/aarch64-linux-gnu/include
+            libdir: /usr/aarch64-linux-gnu/lib
+          - target: armv7-unknown-linux-musleabihf
+            dpkg_arch: arm
+            dpkg_libc: musl-dev
+            include: /usr/include/arm-linux-musleabihf
+            libdir: /usr/lib/arm-linux-musleabihf
+          - target: i686-unknown-linux-musl
+            dpkg_arch:
+            dpkg_libc: libc6-dev-i386-cross
+            include: /usr/i686-linux-gnu/include
+            libdir: /usr/i686-linux-gnu/lib
+          - target: x86_64-pc-windows-gnu
+            dpkg_arch:
+            dpkg_libc: mingw-w64 nasm
+            include:
+            libdir:
+          - target: x86_64-unknown-linux-gnu
+            dpkg_arch:
+            dpkg_libc:
+            include: /usr/include
+            libdir: /usr/lib
+          - target: x86_64-unknown-linux-musl
+            dpkg_arch:
+            dpkg_libc: musl-dev
+            include: /usr/include/x86_64-linux-musl
+            libdir: /usr/lib/x86_64-linux-musl
         roots: [native-roots, webpki-roots]
     name: ${{ matrix.target }}--${{ matrix.roots }}
     runs-on: ubuntu-latest
@@ -107,7 +134,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.target.target }}
         id: "rust-toolchain"
       - name: install cargo-auditable
         uses: taiki-e/install-action@cargo-auditable
@@ -117,44 +144,43 @@ jobs:
             ~/.cargo/git
             ~/.cargo/registry
             target
-          key: "${{runner.os}} Target ${{ matrix.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
+          key: "${{runner.os}} Target ${{ matrix.target.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
       - name: Build crab-hole
         run: |
+          [ -z "${{ matrix.target.dpkg_arch }}" ] || sudo dpkg --add-architecture "${{ matrix.target.dpkg_arch }}"
           sudo apt update -y
           sudo apt install -y --no-install-recommends bindgen
-          envs=("RUST_BACKTRACE=1" "CARGO_PROFILE_RELEASE_LTO=true")
-          if [[ "${{ matrix.target }}" == *windows* ]]
-          then
-            sudo apt install -y --no-install-recommends mingw-w64 nasm
-          else
-            if [[ "${{ matrix.target }}" == *musl* ]]
-            then
-              sudo apt install -y --no-install-recommends musl-dev
-              envs+=("CFLAGS_${{ matrix.target }}=-isystem /usr/include/x86_64-linux-musl/ -fuse-ld=lld")
-              envs+=("CXXFLAGS_${{ matrix.target }}=-isystem /usr/include/x86_64-linux-musl/ -fuse-ld=lld")
-              envs+=("CARGO_PROFILE_RELEASE_OPT_LEVEL=s" "CARGO_PROFILE_RELEASE_PANIC=abort") # portable binary - optimise size
-              envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=lld -Clink-arg=--target=${{ matrix.target }}")
+          if [ -n "${{ matrix.target.dpkg_libc }}" ]; then
+            if [ -z "${{ matrix.target.dpkg_arch }}"]; then
+              sudo apt install -y --no-install-recommends ${{ matrix.target.dpkg_libc }}
             else
-              envs+=("CFLAGS_${{ matrix.target }}=-fuse-ld=lld")
-              envs+=("CXXFLAGS_${{ matrix.target }}=-fuse-ld=lld")
-              envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=lld")
+              sudo apt install -y --no-install-recommends "${{ matrix.target.dpkg_libc }}:${{ matrix.target.dpkg_arch }}"
             fi
+          fi
+          envs=("RUST_BACKTRACE=1" "CARGO_PROFILE_RELEASE_LTO=true")
+          if [[ "${{ matrix.target.target }}" != *windows* ]]; then
             envs+=("CC=clang")
-            envs+=("CC_${{ matrix.target }}=clang")
+            envs+=("CC_${{ matrix.target.target }}=clang")
             envs+=("CXX=clang++")
-            envs+=("CXX_${{ matrix.target }}=clang++")
+            envs+=("CXX_${{ matrix.target.target }}=clang++")
+            envs+=("CFLAGS_${{ matrix.target.target }}=-isystem ${{ matrix.target.include }} -L ${{ matrix.target.libdir }} -fuse-ld=lld")
+            envs+=("CXXFLAGS_${{ matrix.target.target }}=-isystem ${{ matrix.target.include }} -L ${{ matrix.target.libdir }} -fuse-ld=lld")
+            envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-fuse-ld=lld -C link-arg=--target=${{ matrix.target.target }} -C link-arg=-L -C link-arg=${{ matrix.target.libdir }}")
+            if [[ "${{ matrix.target.target }}" == *musl* ]]; then
+              envs+=("CARGO_PROFILE_RELEASE_OPT_LEVEL=s" "CARGO_PROFILE_RELEASE_PANIC=abort") # portable binary - optimise size
+            fi
           fi
           env "${envs[@]}" \
-          cargo auditable build -v --release --locked --no-default-features --features aws-lc-rs,${{ matrix.roots }} --target ${{ matrix.target }}
+          cargo auditable build -v --release --locked --no-default-features --features aws-lc-rs,${{ matrix.roots }} --target ${{ matrix.target.target }}
           tree
         shell: bash --noprofile --norc -exo pipefail {0}
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.target }}--${{ matrix.roots }}"
+          name: "${{ matrix.target.target }}--${{ matrix.roots }}"
           path: |
-            target/${{ matrix.target }}/release/crab-hole
-            target/${{ matrix.target }}/release/crab-hole.exe
+            target/${{ matrix.target.target }}/release/crab-hole
+            target/${{ matrix.target.target }}/release/crab-hole.exe
   
   build_x86_64-apple-darwin:
     runs-on: macos-latest

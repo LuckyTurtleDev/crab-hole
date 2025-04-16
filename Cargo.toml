@@ -16,7 +16,7 @@ include = [
 ]
 
 [features]
-default = ["native-roots", "aws-lc-rs"]
+default = ["native-roots", "ring"]
 native-roots = ["hickory-resolver/rustls-platform-verifier", "reqwest/rustls-tls-native-roots"]
 webpki-roots = ["hickory-resolver/webpki-roots", "reqwest/rustls-tls-webpki-roots"]
 ring = ["hickory-server/dnssec-ring", "hickory-server/tls-ring", "hickory-server/https-ring", "hickory-server/quic-ring", "hickory-server/h3-ring"]

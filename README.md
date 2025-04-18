@@ -9,7 +9,7 @@ Crab-hole is a cross platform Pi-hole clone written in Rust using [hickory-dns/t
 It can be used as a network wide Ad and spy blocker or run on your local pc.
 
 For a secure and private communication, crab-hole has builtin support for doh(https), doq(quic) and dot(tls) for down- and upstreams and dnssec for upstreams.
-It also comes with privacy friendly default logging settings.
+It also comes with privacy friendly default logging settings and API support.
 
 # Installation: 
 Crab-hole is available in the following repositories:
@@ -159,3 +159,10 @@ This only validates the config, block- and allowlists, and does not start the DN
 Due to an upstream issue of [hickory-dns](https://github.com/hickory-dns/hickory-dns/issues/2429), non DNSSEC sites will not be resolved if `validate = true`.
 Only DNSSEC capable sites will be resolved with this setting.
 To prevent this, set `validate = false` or omit the `[upstream.options]`.
+
+## API
+You can enable the documentation by setting `show_doc = true` inside the `[api]` section of the config.
+Additionally you can find the [openapi](openapi.json) defintion in this repositiory.
+
+For a visual representation you can paste or upload the specification into [redoc](https://redocly.github.io/redoc/).
+Additionally you can use [swagger.io](https://editor.swagger.io/).

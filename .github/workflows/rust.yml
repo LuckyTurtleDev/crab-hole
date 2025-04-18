@@ -143,6 +143,11 @@ jobs:
       - name: Build crab-hole
         run: |
           envs=("RUST_BACKTRACE=1" "CARGO_PROFILE_RELEASE_LTO=true")
+          include=
+          if [ -n "${{ matrix.target.include }}" ]; then
+            include="-isystem ${{ matrix.target.include }}"
+            envs+=("AWS_LC_SYS_INCLUDES=${{ matrix.target.include }}")
+          fi
           if [[ "${{ matrix.target.target }}" != *windows* ]]; then
             static=
             if [[ "${{ matrix.target.target }}" == *musl* ]]; then
@@ -153,12 +158,9 @@ jobs:
             envs+=("CC_${{ matrix.target.target }}=clang")
             envs+=("CXX=clang++")
             envs+=("CXX_${{ matrix.target.target }}=clang++")
-            envs+=("CFLAGS_${{ matrix.target.target }}=-v --target=${{matrix.target.target}} $static -fuse-ld=lld ${{matrix.target.flags}}")
-            envs+=("CXXFLAGS_${{ matrix.target.target }}=-v --target=${{matrix.target.target}} $static -fuse-ld=lld ${{matrix.target.flags}}")
+            envs+=("CFLAGS_${{ matrix.target.target }}=-v --target=${{matrix.target.target}} $static -fuse-ld=lld ${{matrix.target.flags}} $include")
+            envs+=("CXXFLAGS_${{ matrix.target.target }}=-v --target=${{matrix.target.target}} $static -fuse-ld=lld ${{matrix.target.flags}} $include")
             envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-v -C link-arg=--target=${{ matrix.target.target }} -C link-arg=-fuse-ld=lld")
-          fi
-          if [ -n "${{ matrix.target.include }}" ]; then
-            envs+=("AWS_LC_SYS_INCLUDES=${{ matrix.target.include }}")
           fi
           env "${envs[@]}" \
           cargo auditable build -v --release --locked --no-default-features --features aws-lc-rs,${{ matrix.roots }} --target ${{ matrix.target.target }}

@@ -120,7 +120,7 @@ jobs:
       RUSTUP_HOME: /usr/local/share/rust
     needs: [test]
     steps:
-      - uses: pacman -Syu cargo-auditable clang git lld nodejs rustup rust-bindgen ${{matrix.target.pkg}}
+      - run: pacman -Syu cargo-auditable clang git lld nodejs rustup rust-bindgen ${{matrix.target.pkg}}
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:

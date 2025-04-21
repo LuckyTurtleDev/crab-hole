@@ -74,7 +74,7 @@ if [[ "$TARGET" != *windows* ]]; then
 
 	# we'll use mold as the linker
 	cflags="$cflags -fuse-ld=mold"
-	rustflags="-C link-arg=-fuse-ld=mold"
+	rustflags="$rustflags -C link-arg=-fuse-ld=mold"
 
 	envs+=("CC=clang")
 	envs+=("CC_$TARGET=clang")

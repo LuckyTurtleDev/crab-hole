@@ -93,31 +93,31 @@ jobs:
         target: 
           - target: aarch64-unknown-linux-musl
             pkg: musl-aarch64
-            flags: --sysroot /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-unknown-linux-musl/
+            sysroot: /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-unknown-linux-musl/
             include: /usr/aarch64-linux-musl/lib/musl/include/
           - target: aarch64-unknown-linux-gnu
             pkg: aarch64-linux-gnu-glibc
-            flags: --sysroot /usr/aarch64-linux-gnu/
+            sysroot: /usr/aarch64-linux-gnu/
             include: /usr/aarch64-linux-gnu/include/
           - target: armv7-unknown-linux-musleabihf
             pkg: musl-aarch64 # hack: we need just the headers, so arch is not important
-            flags: --sysroot /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/armv7-unknown-linux-musleabihf/
+            sysroot: /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/armv7-unknown-linux-musleabihf/
             include: /usr/aarch64-linux-musl/lib/musl/include/ # wrong arch
           - target: i686-unknown-linux-musl
             pkg: musl
-            flags: --sysroot /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/i686-unknown-linux-musl/
+            sysroot: /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/i686-unknown-linux-musl/
             include: /usr/lib/musl/include
           - target: x86_64-pc-windows-gnu
             pkg: mingw-w64 nasm
-            flags:
+            sysroot:
             include:
           - target: x86_64-unknown-linux-gnu
             pkg:
-            flags:
+            sysroot:
             include:
           - target: x86_64-unknown-linux-musl
             pkg: musl
-            flags: --sysroot /usr/lib/musl
+            sysroot: /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-musl/
             include: /usr/lib/musl/include
         roots: [native-roots, webpki-roots]
     name: ${{ matrix.target.target }}--${{ matrix.roots }}
@@ -127,7 +127,7 @@ jobs:
       RUSTUP_HOME: /usr/local/share/rust
     needs: [test]
     steps:
-      - run: pacman -Syu --noconfirm cargo-auditable clang cmake git lld nodejs rustup rust-bindgen ${{matrix.target.pkg}}
+      - run: pacman -Syu --noconfirm cargo-auditable clang cmake git mold nodejs rustup rust-bindgen ${{matrix.target.pkg}}
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -148,6 +148,12 @@ jobs:
             include="-isystem ${{ matrix.target.include }}"
             envs+=("AWS_LC_SYS_INCLUDES=${{ matrix.target.include }}")
           fi
+          sysroot=
+          sysrootlinkarg=
+          if [ -n "${{ matrix.target.sysroot }}" ]; then
+            sysroot="--sysroot ${{ matrix.target.sysroot }}"
+            sysrootlinkarg="-C link-arg=--sysroot=${{matrix.target.sysroot}}"
+          fi
           if [[ "${{ matrix.target.target }}" != *windows* ]]; then
             static=
             if [[ "${{ matrix.target.target }}" == *musl* ]]; then
@@ -158,9 +164,9 @@ jobs:
             envs+=("CC_${{ matrix.target.target }}=clang")
             envs+=("CXX=clang++")
             envs+=("CXX_${{ matrix.target.target }}=clang++")
-            envs+=("CFLAGS_${{ matrix.target.target }}=-v --target=${{matrix.target.target}} $static -fuse-ld=lld ${{matrix.target.flags}} $include")
-            envs+=("CXXFLAGS_${{ matrix.target.target }}=-v --target=${{matrix.target.target}} $static -fuse-ld=lld ${{matrix.target.flags}} $include")
-            envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-v -C link-arg=--target=${{ matrix.target.target }} -C link-arg=-fuse-ld=lld")
+            envs+=("CFLAGS_${{ matrix.target.target }}=-v --target=${{matrix.target.target}} $static -fuse-ld=mold $sysroot $include")
+            envs+=("CXXFLAGS_${{ matrix.target.target }}=-v --target=${{matrix.target.target}} $static -fuse-ld=mold $sysroot $include")
+            envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-v -C link-arg=--target=${{ matrix.target.target }} $sysrootlinkarg -C link-arg=-fuse-ld=mold")
           fi
           env "${envs[@]}" \
           cargo auditable build -v --release --locked --no-default-features --features aws-lc-rs,${{ matrix.roots }} --target ${{ matrix.target.target }}

@@ -142,7 +142,7 @@ jobs:
             ~/.cargo/registry
             target
           key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cargo build --release --all-features
+      - run: cargo build --release --features ring,${{ matrix.roots }}
         env:
           RUST_BACKTRACE: 1
       - name: 'Upload Artifact'

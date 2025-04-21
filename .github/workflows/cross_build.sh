@@ -10,7 +10,7 @@ if [[ "$TARGET" != *windows* ]]; then
 
 	# add target to flags
 	cflags="$cflags --target=$TARGET"
-	rustflags="-C link-arg=--target=$TARGET"
+	rustflags="$rustflags -C link-arg=--target=$TARGET"
 
 	# add sysroot flags, including linker search path
 	if [ -n "$TARGET_SYSROOT" ]; then
@@ -42,10 +42,10 @@ if [[ "$TARGET" != *windows* ]]; then
 			-G Ninja \
 			-DCMAKE_AR=/usr/bin/llvm-ar \
 			-DCMAKE_ASM_TARGET="$TARGET" \
-			-DCMAKE_ASM_FLAGS="$cflags" \
+			-DCMAKE_ASM_FLAGS="$cflags -nostdlib" \
 			-DCMAKE_C_COMPILER=/usr/bin/clang \
 			-DCMAKE_C_COMPILER_TARGET="$TARGET" \
-			-DCMAKE_C_FLAGS="$cflags" \
+			-DCMAKE_C_FLAGS="$cflags -nostdlib" \
 			-DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=mold" \
 			-DCMAKE_NM=/usr/bin/llvm-nm \
 			-DCMAKE_RANLIB=/usr/bin/llvm-ranlib \
@@ -63,8 +63,8 @@ if [[ "$TARGET" != *windows* ]]; then
 		cd ../..
 
 		# set the rtlib
-		cflags="-nostartfiles -rtlib=compiler-rt"
-		rustflags="-C link-arg=-rtlib=compiler-rt"
+		cflags="$cflags -nostartfiles -rtlib=compiler-rt"
+		rustflags="$rustflags -C link-arg=-rtlib=compiler-rt"
 
 		# rust automatically makes everything static, for C we need to do it manually
 		cflags="$cflags -static"

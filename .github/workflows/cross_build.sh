@@ -83,6 +83,10 @@ if [[ "$TARGET" != *windows* ]]; then
 	cflags="$cflags -fuse-ld=mold"
 	rustflags="$rustflags -C link-arg=-fuse-ld=mold"
 
+	# aws-lc-rs-sys came up with the brilliant idea to force -Werror
+	# which means it complains about -fuse-ld=mold, -L etc being unused 99% of the time
+	cflags="$cflags -Wno-unused-command-line-argument"
+
 	envs+=("CC=clang")
 	envs+=("CC_$TARGET=clang")
 	envs+=("CXX=clang++")

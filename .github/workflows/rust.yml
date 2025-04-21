@@ -7,42 +7,63 @@ on:
     types: [released]
 
 jobs:
-  test:
+
+  check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - run: sudo apt-get update -y && sudo apt-get install -y knot-dnsutils
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         id: "rust-toolchain"
       - name: install cargo-hack
         uses: taiki-e/install-action@cargo-hack
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/git
             ~/.cargo/registry
             target
-          key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cargo hack test --feature-powerset --at-least-one-of aws-lc-rs,ring --locked -- --include-ignored
+          key: "${{runner.os}} Rust check ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
+      - run: cargo hack check --feature-powerset --at-least-one-of aws-lc-rs,ring --locked
+        env:
+          RUST_BACKTRACE: 1
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -y && sudo apt-get install -y knot-dnsutils
+      - uses: dtolnay/rust-toolchain@stable
+        id: "rust-toolchain"
+      - name: install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: "${{runner.os}} Rust test ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
+      - run: cargo hack test --feature-powerset --at-least-one-of aws-lc-rs,ring --mutually-exclusive-features aws-lc-rs,ring --skip __debug_parser,default,native-roots,webpki-roots --locked -- --include-ignored
         env:
           RUST_BACKTRACE: 1
 
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
   benchmark:
+    needs: [check]
     name: bench
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/git
@@ -57,7 +78,7 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: msrd0/cargo-publish-action@v1
         with: 
@@ -69,37 +90,84 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [i686-unknown-linux-musl, x86_64-unknown-linux-musl, arm-unknown-linux-musleabihf, armv7-unknown-linux-musleabihf, aarch64-unknown-linux-musl,   x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, x86_64-pc-windows-gnu]
+        target: 
+          - target: aarch64-unknown-linux-musl
+            pkg: musl-aarch64
+            sysroot: /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/aarch64-unknown-linux-musl
+            include: /usr/aarch64-linux-musl/lib/musl/include/
+          - target: aarch64-unknown-linux-gnu
+            pkg: aarch64-linux-gnu-glibc
+            sysroot: /usr/aarch64-linux-gnu/
+            include: /usr/aarch64-linux-gnu/include/
+          - target: armv7-unknown-linux-musleabihf
+            pkg: musl-aarch64 # hack: we need just the headers, so arch is not important
+            sysroot: /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/armv7-unknown-linux-musleabihf
+            include: /usr/aarch64-linux-musl/lib/musl/include/ # wrong arch
+          - target: i686-unknown-linux-musl
+            pkg: musl
+            sysroot: /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/i686-unknown-linux-musl
+            include: /usr/lib/musl/include
+          - target: x86_64-pc-windows-gnu
+            pkg: mingw-w64 nasm
+            sysroot:
+            include:
+          - target: x86_64-unknown-linux-gnu
+            pkg:
+            sysroot:
+            include:
+          - target: x86_64-unknown-linux-musl
+            pkg: musl
+            sysroot: /usr/local/share/rust/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-musl
+            include: /usr/lib/musl/include
         roots: [native-roots, webpki-roots]
-    name: ${{ matrix.target }}--${{ matrix.roots }}
+    name: ${{ matrix.target.target }}--${{ matrix.roots }}
     runs-on: ubuntu-latest
+    container: quay.io/archlinux/archlinux:base-devel
+    env:
+      RUSTUP_HOME: /usr/local/share/rust
     needs: [test]
     steps:
-      - uses: actions/checkout@v3
+      - run: |
+          pacman -Syu --noconfirm \
+            cargo-auditable \
+            clang \
+            cmake \
+            git \
+            llvm \
+            lsd \
+            mold \
+            ninja \
+            nodejs \
+            python \
+            rustup \
+            rust-bindgen \
+            ${{matrix.target.pkg}}
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        id: "rust-toolchain"
-      - name: install cross
-        uses: baptiste0928/cargo-install@v2
         with:
-          crate: cross
-      - uses: actions/cache@v3
+          targets: ${{ matrix.target.target }}
+        id: "rust-toolchain"
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/git
             ~/.cargo/registry
             target
-          key: "${{runner.os}} Target ${{ matrix.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cross build --release --locked --no-default-features --features ${{ matrix.roots }} --target ${{ matrix.target }}
-        env:
-          RUST_BACKTRACE: 1
-      - run: tree
+          key: "${{runner.os}} Target ${{ matrix.target.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
+      - name: Build crab-hole
+        run: |
+          TARGET="${{ matrix.target.target }}" \
+          TARGET_SYSROOT="${{ matrix.target.sysroot }}" \
+          TARGET_INCLUDE="${{ matrix.target.include }}" \
+          ROOTS="${{ matrix.roots }}" \
+          .github/workflows/cross_build.sh
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.target }}--${{ matrix.roots }}"
+          name: "${{ matrix.target.target }}--${{ matrix.roots }}"
           path: |
-            target/${{ matrix.target }}/release/crab-hole
-            target/${{ matrix.target }}/release/crab-hole.exe
+            target/${{ matrix.target.target }}/release/crab-hole
+            target/${{ matrix.target.target }}/release/crab-hole.exe
   
   build_x86_64-apple-darwin:
     runs-on: macos-latest
@@ -110,21 +178,22 @@ jobs:
     name: x86_64-apple-darwin--${{ matrix.roots }}
     needs: [test]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         id: "rust-toolchain"
-      - uses: actions/cache@v3
+      - uses: taiki-e/install-action@cargo-auditable
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/git
             ~/.cargo/registry
             target
           key: "${{runner.os}} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
-      - run: cargo build --release --all-features
+      - run: cargo auditable build --release --no-default-features --features aws-lc-rs,${{ matrix.roots }}
         env:
           RUST_BACKTRACE: 1
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: "x86_64-apple-darwin--${{ matrix.roots }}"
           path: target/release/crab-hole
@@ -134,8 +203,8 @@ jobs:
     needs: [cross_build]
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
-    - uses: actions/download-artifact@v3
+      uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
       with:
         path: github_artifacts
     - name: docker
@@ -151,8 +220,8 @@ jobs:
     if: ${{ github.event_name == 'release' }}
     steps:
     - name: Checkout repository #needed to get github.event.release.tag_name 
-      uses: actions/checkout@v3
-    - uses: actions/download-artifact@v3
+      uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
       with:
         path: github_artifacts
     - name: Upload Release Artifacts

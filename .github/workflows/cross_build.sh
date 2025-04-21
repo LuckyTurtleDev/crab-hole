@@ -34,6 +34,7 @@ if [[ "$TARGET" != *windows* ]]; then
 	if [[ "$TARGET" == *musl* ]]; then
 		# we need a compiler runtime, and we don't have access to (pre-compiled) libgcc.a
 		llvmver=$(pacman -Qi clang | tr '-' ' ' | awk '/Version/{print $3;}')
+		llvmmajor=$(pacman -Qi clang | tr '.' ' ' | awk '/Version/{print $3;}')
 		git clone --depth=1 --branch=llvmorg-$llvmver https://github.com/llvm/llvm-project
 		cd llvm-project
 		mkdir build-compiler-rt
@@ -62,9 +63,15 @@ if [[ "$TARGET" != *windows* ]]; then
 		ninja install
 		cd ../..
 
+		# clang/mold are very strict in their compiler-rt search path
+		mkdir -p /usr/lib/clang/$llvmmajor/lib/$TARGET
+		ln -s \
+			$(find find llvm-project/build-compiler-rt/ -name 'libclang_rt.builtins*.a' | head -n1) \
+			/usr/lib/clang/$llvmmajor/lib/$TARGET/libclang_rt.builtins.a
+
 		# set the rtlib
 		cflags="$cflags -nostartfiles -rtlib=compiler-rt"
-		rustflags="$rustflags -C link-arg=-rtlib=compiler-rt"
+		#rustflags="$rustflags -C link-arg=-rtlib=compiler-rt"
 
 		# rust automatically makes everything static, for C we need to do it manually
 		cflags="$cflags -static"

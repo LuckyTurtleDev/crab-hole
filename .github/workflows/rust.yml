@@ -127,7 +127,21 @@ jobs:
       RUSTUP_HOME: /usr/local/share/rust
     needs: [test]
     steps:
-      - run: pacman -Syu --noconfirm cargo-auditable clang cmake git lsd mold ninja nodejs rustup rust-bindgen ${{matrix.target.pkg}}
+      - run: |
+          pacman -Syu --noconfirm \
+            cargo-auditable
+            clang
+            cmake
+            git
+            llvm
+            lsd
+            mold
+            ninja
+            nodejs
+            python
+            rustup
+            rust-bindgen
+            ${{matrix.target.pkg}}
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:

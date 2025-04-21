@@ -129,18 +129,18 @@ jobs:
     steps:
       - run: |
           pacman -Syu --noconfirm \
-            cargo-auditable
-            clang
-            cmake
-            git
-            llvm
-            lsd
-            mold
-            ninja
-            nodejs
-            python
-            rustup
-            rust-bindgen
+            cargo-auditable \
+            clang \
+            cmake \
+            git \
+            llvm \
+            lsd \
+            mold \
+            ninja \
+            nodejs \
+            python \
+            rustup \
+            rust-bindgen \
             ${{matrix.target.pkg}}
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

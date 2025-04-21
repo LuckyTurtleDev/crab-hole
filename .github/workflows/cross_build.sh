@@ -66,7 +66,7 @@ if [[ "$TARGET" != *windows* ]]; then
 		# clang/mold are very strict in their compiler-rt search path
 		mkdir -p /usr/lib/clang/$llvmmajor/lib/$TARGET
 		ln -s \
-			$(find llvm-project/build-compiler-rt/ -name 'libclang_rt.builtins*.a' | head -n1) \
+			$(realpath $(find llvm-project/build-compiler-rt/ -name 'libclang_rt.builtins*.a' | head -n1)) \
 			/usr/lib/clang/$llvmmajor/lib/$TARGET/libclang_rt.builtins.a
 
 		# set the rtlib

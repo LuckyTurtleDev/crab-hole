@@ -17,8 +17,8 @@ include = [
 
 [features]
 default = ["native-roots", "aws-lc-rs"]
-native-roots = ["hickory-resolver/rustls-platform-verifier", "reqwest/rustls-tls-native-roots"]
-webpki-roots = ["hickory-resolver/webpki-roots", "reqwest/rustls-tls-webpki-roots"]
+native-roots = ["hickory-resolver/rustls-platform-verifier", "reqwest/rustls-tls-native-roots-no-provider"]
+webpki-roots = ["hickory-resolver/webpki-roots", "reqwest/rustls-tls-webpki-roots-no-provider"]
 ring = ["hickory-server/dnssec-ring", "hickory-server/tls-ring", "hickory-server/https-ring", "hickory-server/quic-ring", "hickory-server/h3-ring"]
 aws-lc-rs = ["hickory-server/dnssec-aws-lc-rs", "hickory-server/tls-aws-lc-rs", "hickory-server/https-aws-lc-rs", "hickory-server/quic-aws-lc-rs", "hickory-server/h3-aws-lc-rs"]
 # internal debugging feature for the parser
@@ -43,7 +43,7 @@ poem = "1.3.57"
 poem-openapi = { version = "3.0.1", features = ["redoc", "time"] }
 qp-trie = "0.8.2"
 regex = "1.10.2"
-reqwest = { version = "0.12.15", default-features = false }
+reqwest = { version = "0.12.15", default-features = false, features = ["gzip", "http2"] }
 rustls = { version = "0.23", default-features = false }
 rustls-pemfile = "2.2.0"
 serde = { version = "1.0", features = ["derive"] }

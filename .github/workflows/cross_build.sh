@@ -17,7 +17,7 @@ if [ -n "$TARGET_SYSROOT" ]; then
 	lsd -lh --tree "$TARGET_SYSROOT"
 	# add normal sysroot flag
 	sysroot="--sysroot $TARGET_SYSROOT"
-	sysrootlinkarg="-C link-arg=--sysroot=${{matrix.target.sysroot}}"
+	sysrootlinkarg="-C link-arg=--sysroot=$TARGET_SYSROOT"
 	# clang/mold ain't smart enough to search in rustup's self-contained dir
 	# so we explicitly set the linker search path
 	if [ -d "$TARGET_SYSROOT/lib/self-contained" ]; then
@@ -35,7 +35,7 @@ if [[ "$TARGET" != *windows* ]]; then
 		# musl binaries are portable - optimise them for size
 		envs+=("CARGO_PROFILE_RELEASE_OPT_LEVEL=s" "CARGO_PROFILE_RELEASE_PANIC=abort")
 	fi
-	
+
 	envs+=("CC=clang")
 	envs+=("CC_$TARGET=clang")
 	envs+=("CXX=clang++")

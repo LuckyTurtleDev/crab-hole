@@ -127,7 +127,7 @@ jobs:
       RUSTUP_HOME: /usr/local/share/rust
     needs: [test]
     steps:
-      - run: pacman -Syu --noconfirm cargo-auditable clang cmake git mold nodejs rustup rust-bindgen ${{matrix.target.pkg}}
+      - run: pacman -Syu --noconfirm cargo-auditable clang cmake git lsd mold nodejs rustup rust-bindgen ${{matrix.target.pkg}}
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -142,46 +142,12 @@ jobs:
           key: "${{runner.os}} Target ${{ matrix.target.target }} Rust ${{steps.rust-toolchain.outputs.cachekey}} Lock ${{hashFiles('Cargo.lock')}}"
       - name: Build crab-hole
         run: |
-          envs=("RUST_BACKTRACE=1" "CARGO_PROFILE_RELEASE_LTO=true")
-          include=
-          if [ -n "${{ matrix.target.include }}" ]; then
-            include="-isystem ${{ matrix.target.include }}"
-            envs+=("AWS_LC_SYS_INCLUDES=${{ matrix.target.include }}")
-          fi
-          sysroot=
-          sysrootlinkarg=
-          if [ -n "${{ matrix.target.sysroot }}" ]; then
-            tree "${{ matrix.target.sysroot }}"
-            # add normal sysroot flag
-            sysroot="--sysroot ${{ matrix.target.sysroot }}"
-            sysrootlinkarg="-C link-arg=--sysroot=${{matrix.target.sysroot}}"
-            # clang/mold ain't smart enough to search in rustup's self-contained dir
-            # so we explicitly set the linker search path
-            if [ -d "${{ matrix.target.sysroot }}/lib/self-contained" ]; then
-              sysroot="$sysroot -B ${{ matrix.target.sysroot }}/lib/self-contained"
-              sysrootlinkarg="-C link-arg=-B -C link-arg=${{ matrix.target.sysroot }}/lib/self-contained"
-            fi
-          fi
-          if [[ "${{ matrix.target.target }}" != *windows* ]]; then
-            static=
-            if [[ "${{ matrix.target.target }}" == *musl* ]]; then
-              static=-static
-              envs+=("CARGO_PROFILE_RELEASE_OPT_LEVEL=s" "CARGO_PROFILE_RELEASE_PANIC=abort") # portable binary - optimise size
-            fi
-            envs+=("CC=clang")
-            envs+=("CC_${{ matrix.target.target }}=clang")
-            envs+=("CXX=clang++")
-            envs+=("CXX_${{ matrix.target.target }}=clang++")
-            envs+=("CFLAGS_${{ matrix.target.target }}=-v --target=${{matrix.target.target}} $static -fuse-ld=mold $sysroot $include")
-            envs+=("CXXFLAGS_${{ matrix.target.target }}=-v --target=${{matrix.target.target}} $static -fuse-ld=mold $sysroot $include")
-            envs+=("RUSTFLAGS=-C linker=clang -C link-arg=-v -C link-arg=--target=${{ matrix.target.target }} -C link-arg=-fuse-ld=mold $sysrootlinkarg")
-          fi
-          env "${envs[@]}" \
-          cargo auditable build -v --release --locked --no-default-features --features aws-lc-rs,${{ matrix.roots }} --target ${{ matrix.target.target }}
-
-          tree || true
-          file target/${{ matrix.target.target }}/release/crab-hole* || true
-        shell: bash --noprofile --norc -exo pipefail {0}
+          TARGET="${{ matrix.target.target }}" \
+          TARGET_PKG="${{ matrix.target.pkg }}" \
+          TARGET_SYSROOT="${{ matrix.target.sysroot }}" \
+          TARGET_INCLUDE="${{ matrix.target.include }}" \
+          ROOTS="${{ matrix.roots }}" \
+          .github/workflows/cross_build.sh
       - name: 'Upload Artifact'
         uses: actions/upload-artifact@v4
         with:

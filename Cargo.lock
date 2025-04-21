@@ -1110,8 +1110,7 @@ checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
 [[package]]
 name = "hickory-proto"
 version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d844af74f7b799e41c78221be863bade11c430d46042c3b49ca8ae0c6d27287"
+source = "git+https://github.com/msrd0/trust-dns?branch=quic-without-ring#fbced4e4f667050def068929d982bd0d5998a80d"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -1119,7 +1118,6 @@ dependencies = [
  "bitflags",
  "bytes",
  "cfg-if",
- "critical-section",
  "data-encoding",
  "enum-as-inner",
  "futures-channel",
@@ -1153,8 +1151,7 @@ dependencies = [
 [[package]]
 name = "hickory-recursor"
 version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21c7367ac8bf3c5ee020adc4a1f98e4850f21a8536e355c922e23f818ae32715"
+source = "git+https://github.com/msrd0/trust-dns?branch=quic-without-ring#fbced4e4f667050def068929d982bd0d5998a80d"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -1177,8 +1174,7 @@ dependencies = [
 [[package]]
 name = "hickory-resolver"
 version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a128410b38d6f931fcc6ca5c107a3b02cabd6c05967841269a4ad65d23c44331"
+source = "git+https://github.com/msrd0/trust-dns?branch=quic-without-ring#fbced4e4f667050def068929d982bd0d5998a80d"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -1203,8 +1199,7 @@ dependencies = [
 [[package]]
 name = "hickory-server"
 version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "716f516285473ce476dfc996bac9a3c9ef2fee4f380ebec5980b12216fe4f547"
+source = "git+https://github.com/msrd0/trust-dns?branch=quic-without-ring#fbced4e4f667050def068929d982bd0d5998a80d"
 dependencies = [
  "async-trait",
  "bytes",
@@ -2206,9 +2201,9 @@ dependencies = [
 
 [[package]]
 name = "prefix-trie"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb5f930995ba4986bd239ba8d8fded67cad82d1db329c4f316f312847cba16aa"
+checksum = "85cf4c7c25f1dd66c76b451e9041a8cfce26e4ca754934fa7aed8d5a59a01d20"
 dependencies = [
  "ipnet",
  "num-traits",

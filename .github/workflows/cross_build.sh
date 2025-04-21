@@ -19,10 +19,10 @@ if [[ "$TARGET" != *windows* ]]; then
 		cflags="$cflags --sysroot $TARGET_SYSROOT"
 		rustflags="$rustflags -C link-arg=--sysroot=$TARGET_SYSROOT"
 		# clang/mold ain't smart enough to search in rustup's self-contained dir
-		# so we explicitly set the linker search path
+		# so we explicitly set the lib and linker search path
 		if [ -d "$TARGET_SYSROOT/lib/self-contained" ]; then
 			cflags="$cflags -B $TARGET_SYSROOT/lib/self-contained"
-			rustflags="$rustflags -C link-arg=-B -C link-arg=$TARGET_SYSROOT/lib/self-contained"
+			cflags="$cflags -L $TARGET_SYSROOT/lib/self-contained"
 		fi
 	fi
 

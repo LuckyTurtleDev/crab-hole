@@ -104,6 +104,16 @@ dns_hostname = "dns.example.com"
 # optional (default = 3000)
 timeout_ms = 3000
 
+[[downstream]]
+protocol = "h3"
+listen = "127.0.0.1"
+port = 8443
+certificate = "dns.example.com.crt"
+key = "dns.example.com.key"
+dns_hostname = "dns.example.com"
+# optional (default = 3000)
+timeout_ms = 3000
+
 # optional
 [upstream.options]
 # optional (default = false)

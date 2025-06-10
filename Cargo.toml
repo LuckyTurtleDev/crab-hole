@@ -37,6 +37,7 @@ hickory-server = { version = "0.25.1", default-features = false, features = ["re
 hickory-resolver = { version = "0.25.1", default-features = false }
 log = "0.4.17"
 my-env-logger-style = { version = "0.1.1", features = ["custom-arg-formatter"] }
+notify = "8.0"
 num-format = "0.4.4"
 once_cell = { version = "1.17.1", features = ["parking_lot"] }
 poem = "1.3.57"

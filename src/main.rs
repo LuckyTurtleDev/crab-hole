@@ -44,8 +44,9 @@ use std::{
 	path::{Path, PathBuf},
 	sync::{
 		atomic::{AtomicU64, Ordering},
-		Arc
+		mpsc, Arc
 	},
+	thread,
 	time::Duration,
 	vec
 };
@@ -53,6 +54,7 @@ use time::OffsetDateTime;
 use tokio::{
 	fs::{read_to_string, write},
 	net::{TcpListener, UdpSocket},
+	sync::RwLock,
 	time::sleep,
 	try_join
 };
@@ -113,6 +115,7 @@ mod blocklist;
 use blocklist::BlockList;
 
 use crate::logger::init_logger;
+use notify::{RecursiveMode, Watcher};
 
 #[derive(Debug, Clone)]
 struct Stats {
@@ -225,37 +228,104 @@ fn reader_for(path: &Path) -> anyhow::Result<BufReader<File>> {
 	})?))
 }
 
+struct WatchedServerCert {
+	inner: RwLock<SingleCertAndKey>
+}
+
+impl WatchedServerCert {
+	fn try_load(cert_path: &Path, key_path: &Path) -> anyhow::Result<SingleCertAndKey> {
+		let certificates = rustls_pemfile::certs(&mut reader_for(cert_path)?)
+			.filter_map(|cert| {
+				if let Err(err) = &cert {
+					warn!("Failed to parse {}: {}", cert_path.display(), err)
+				}
+				cert.ok()
+			})
+			.collect::<Vec<_>>();
+		if certificates.is_empty() {
+			bail!("No x509 certificate found in {}", cert_path.display());
+		}
+		let key = rustls_pemfile::private_key(&mut reader_for(key_path)?)
+			.with_context(|| format!("Failed to parse {}", key_path.display()))?
+			.ok_or_else(|| {
+				anyhow!(
+					"No private RSA/PKCS8/ECKey key found in {}",
+					key_path.display()
+				)
+			})?;
+
+		let certified_key = CertifiedKey::from_der(
+			certificates,
+			key,
+			CryptoProvider::get_default()
+				.expect("CryptoProvider default should have been registered in main!")
+		)?;
+		Ok(SingleCertAndKey::from(certified_key))
+	}
+
+	fn new(cert_path: PathBuf, key_path: PathBuf) -> anyhow::Result<Arc<Self>> {
+		let cert_and_key = Self::try_load(&cert_path, &key_path)?;
+		let this = Arc::new(Self {
+			inner: RwLock::new(cert_and_key)
+		});
+
+		let (tx, rx) = mpsc::channel();
+		let mut watcher = notify::recommended_watcher(tx)?;
+		// these are supposed to be files and not directories, so we don't need recursion
+		for path in [&cert_path, &key_path] {
+			if let Err(err) = watcher.watch(path, RecursiveMode::NonRecursive) {
+				error!("Unable to watch {}: {err:?}", path.display());
+			}
+		}
+
+		// try to reload certificates on each event
+		{
+			let this = Arc::clone(&this);
+			thread::spawn(move || {
+				for res in rx {
+					match res {
+						// all events that could lead to the file containing a new certificate
+						Ok(notify::Event {
+							kind:
+								notify::EventKind::Any
+								| notify::EventKind::Create(_)
+								| notify::EventKind::Modify(_)
+								| notify::EventKind::Other,
+							..
+						}) => match Self::try_load(&cert_path, &key_path) {
+							Ok(cert_and_key) => {
+								*this.inner.blocking_write() = cert_and_key;
+							},
+							Err(err) => {
+								error!("Unable to reload certificate from file: {err:?}");
+							}
+						},
+						// ignore other events
+						Ok(_) => {},
+						// log errors
+						Err(err) => {
+							error!(
+								"Error watching certificate file for changes: {err:?}"
+							);
+						}
+					}
+				}
+			});
+		}
+
+		Ok(this)
+	}
+}
+
+impl ResolvesServerCert for WatchedServerCert {
+	
+}
+
 fn load_cert_and_key(
 	cert_path: &Path,
 	key_path: &Path
 ) -> anyhow::Result<Arc<impl ResolvesServerCert>> {
-	let certificates = rustls_pemfile::certs(&mut reader_for(cert_path)?)
-		.filter_map(|cert| {
-			if let Err(err) = &cert {
-				warn!("Failed to parse {}: {}", cert_path.display(), err)
-			}
-			cert.ok()
-		})
-		.collect::<Vec<_>>();
-	if certificates.is_empty() {
-		bail!("No x509 certificate found in {}", cert_path.display());
-	}
-	let key = rustls_pemfile::private_key(&mut reader_for(key_path)?)
-		.with_context(|| format!("Failed to parse {}", key_path.display()))?
-		.ok_or_else(|| {
-			anyhow!(
-				"No private RSA/PKCS8/ECKey key found in {}",
-				key_path.display()
-			)
-		})?;
-
-	let certified_key = CertifiedKey::from_der(
-		certificates,
-		key,
-		CryptoProvider::get_default()
-			.expect("CryptoProvider default should have been registered in main!")
-	)?;
-	Ok(Arc::new(SingleCertAndKey::from(certified_key)))
+	WatchedServerCert::new(cert_path.to_owned(), key_path.to_owned())
 }
 
 /// Load a text file from url and cache it.

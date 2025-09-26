@@ -3,7 +3,11 @@ use crate::{
 	CARGO_PKG_NAME, CARGO_PKG_VERSION
 };
 use log::info;
-use poem::{http::StatusCode, listener::TcpListener, Route, Server};
+use poem::{
+	http::StatusCode,
+	listener::{TcpListener, UnixListener},
+	Route, Server
+};
 use poem_openapi::{
 	auth::ApiKey,
 	param::Query,
@@ -14,14 +18,16 @@ use poem_openapi::{
 use serde::Deserialize;
 use std::{
 	collections::HashMap,
+	path::PathBuf,
 	sync::{atomic::Ordering, Arc}
 };
 use time::OffsetDateTime;
+use tokio::fs::remove_file;
 
 #[derive(Debug, Deserialize, Object)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Config {
-	port: u16,
+	port: Option<u16>, // We assume its a unix socket if no port is specified
 	listen: String,
 	#[serde(default)]
 	show_doc: bool,
@@ -196,7 +202,11 @@ pub(crate) async fn init(
 	blocklist: Arc<BlockList>
 ) -> anyhow::Result<()> {
 	if let Some(config) = config {
-		let address = format!("{}:{}", config.listen, config.port);
+		let address = config
+			.port
+			.map(|p| format!("{}:{p}", config.listen))
+			.unwrap_or_else(|| config.listen.to_string());
+
 		let api_data = Api {
 			blocklist,
 			doc_enable: config.show_doc,
@@ -217,8 +227,26 @@ pub(crate) async fn init(
 		} else {
 			server
 		};
-		info!("start api/web server at {address:?}");
-		Server::new(TcpListener::bind(address)).run(server).await?;
+
+		if let Some(port) = config.port {
+			let tcp = TcpListener::bind((config.listen.clone(), port));
+			info!(
+				"start api/web server at {}:{:?}",
+				config.listen, config.port
+			);
+			Server::new(tcp).run(server).await?;
+		} else {
+			let path = PathBuf::from(config.listen);
+
+			// Old sockets get left behind, so cleanup
+			if path.exists() {
+				remove_file(&path).await?;
+			}
+
+			let unix = UnixListener::bind(path.as_os_str());
+			info!("start api/web server at {}", path.display());
+			Server::new(unix).run(server).await?;
+		};
 	}
 	Ok(())
 }

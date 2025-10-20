@@ -28,7 +28,7 @@ __debug_parser = []
 anyhow = "1.0.100"
 ariadne = "0.3"
 async-trait = "0.1"
-bit-vec = "0.6.3"
+bit-vec = "0.8.0"
 chumsky = "0.9.3"
 clap = { version = "4.5.49", features = ["derive"] }
 directories = "6.0.0"

@@ -736,7 +736,7 @@ mod tests {
 	#[test]
 	#[ignore]
 	fn run() {
-		let config = include_bytes!("../README.md");
+		let config = include_bytes!("../config.toml");
 		let config: super::Config = toml::from_slice(config).unwrap();
 		let _ = thread::spawn(|| async_main(config));
 		let duration = Duration::from_secs(6);

@@ -650,9 +650,24 @@ async fn async_validate_lists(config: Config) -> bool {
 
 #[cfg(test)]
 mod tests {
-	use std::{process::Command, thread, thread::sleep, time::Duration};
+	use std::{
+		fmt::Display,
+		io::BufRead,
+		mem::take,
+		process::Command,
+		thread::{self, sleep},
+		time::Duration
+	};
 
 	use crate::async_main;
+
+	#[track_caller]
+	fn unwrap_dis<T, E: Display>(res: Result<T, E>) -> T {
+		match res {
+			Ok(value) => value,
+			Err(err) => panic!("{err}")
+		}
+	}
 
 	#[test]
 	fn config_file() {
@@ -662,7 +677,60 @@ mod tests {
 	#[test]
 	fn example_config_file() {
 		let config = include_bytes!("../example-config.toml");
-		let _: super::Config = toml::from_slice(config).unwrap();
+		let _: super::Config = unwrap_dis(toml::from_slice(config));
+	}
+
+	#[test]
+	/// test all config files at the readme.me,
+	/// which have a comment `<!-- test_config -->` at the previous line
+	fn readme_config() {
+		#[derive(Debug, PartialEq)]
+		enum PraseState {
+			Nothing,
+			FoundComment,
+			ConfigFile
+		}
+
+		let readme = include_bytes!("../README.md");
+		let mut prase_state = PraseState::Nothing;
+		let mut config_files: Vec<String> = Default::default();
+		let mut current_config_files: String = Default::default();
+		for line in readme.lines() {
+			let line = line.unwrap();
+			let line = line.trim();
+			if line == "<!-- test_config -->" {
+				if prase_state != PraseState::Nothing {
+					panic!("prase readme error:\nfound test comment while not in state PraseState::Nothing\nIs in state {prase_state:?}");
+				}
+				prase_state = PraseState::FoundComment;
+				continue;
+			}
+			if line.starts_with("```") && prase_state == PraseState::FoundComment {
+				prase_state = PraseState::ConfigFile;
+				continue;
+			}
+			if line.starts_with("```") && prase_state == PraseState::ConfigFile {
+				prase_state = PraseState::Nothing;
+				config_files.push(take(&mut current_config_files));
+				continue;
+			}
+			if prase_state == PraseState::ConfigFile {
+				current_config_files.push_str(line);
+				current_config_files.push('\n');
+			}
+		}
+		if prase_state != PraseState::Nothing {
+			panic!("prase readme error:\nUnexpected end of file. Praser is still in state {prase_state:?}");
+		}
+		if config_files.is_empty() {
+			panic!("no config files found at README.md");
+		}
+		println!("found {} configs in readme", config_files.len());
+		for (i, config) in config_files.iter().enumerate() {
+			println!("\n\nprase {}. config", i + 1);
+			println!("prase:\n{config}");
+			let _: super::Config = unwrap_dis(toml::from_str(config));
+		}
 	}
 
 	#[test]

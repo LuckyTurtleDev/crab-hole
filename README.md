@@ -45,6 +45,7 @@ services:
 
 # Configuration:
 Example config file using cloudflare as dot (dns-over-tls) upstream.
+<!-- test_config -->
 ```toml
 [blocklist]
 include_subdomains = true
@@ -125,25 +126,25 @@ timeout_ms = 3000
 socket_addr = "[2606:4700:4700::1111]:853"
 protocol = "tls"
 tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
-trust_nx_responses = false
+trust_negative_responses = false
 
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1001]:853"
 protocol = "tls"
 tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
-trust_nx_responses = false
+trust_negative_responses = false
 
 [[upstream.name_servers]]
 socket_addr = "1.1.1.1:853"
 protocol = "tls"
 tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
-trust_nx_responses = false
+trust_negative_responses = false
 
 [[upstream.name_servers]]
 socket_addr = "1.0.0.1:853"
 protocol = "tls"
 tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
-trust_nx_responses = false
+trust_negative_responses = false
 ```
 
 ## Starting the Server

@@ -45,6 +45,7 @@ services:
 
 # Configuration:
 Example config file using cloudflare as dot (dns-over-tls) upstream.
+<!-- test_config -->
 ```toml
 [blocklist]
 include_subdomains = true

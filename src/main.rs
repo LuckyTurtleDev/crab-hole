@@ -387,10 +387,10 @@ async fn async_main(config: Config) {
 					load_cert_and_key(&downstream.certificate, &downstream.key)
 						.expect("failed to load certificate or private key");
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
-				let tcp_listener = TcpListener::bind(&socket_addr)
-					.await
-					.with_context(|| format!("failed to bind tcp socket {socket_addr}"))
-					.unwrap_or_else(|err| panic!("{err:?}"));
+				let tcp_listener =
+					TcpListener::bind(&socket_addr).await.unwrap_or_else(|err| {
+						panic!("failed to bind tcp socket {socket_addr}: {err:?}")
+					});
 				server
 					.register_https_listener(
 						tcp_listener,
@@ -399,17 +399,35 @@ async fn async_main(config: Config) {
 						downstream.dns_hostname,
 						downstream.http_endpoint
 					)
-					.expect("failed to register tls downstream");
+					.expect("failed to register https downstream");
+			},
+			DownstreamConfig::H3(downstream) => {
+				let cert_and_key =
+					load_cert_and_key(&downstream.certificate, &downstream.key)
+						.expect("failed to load certificate or private key");
+				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
+				let udp_socket =
+					UdpSocket::bind(&socket_addr).await.unwrap_or_else(|err| {
+						panic!("failed to bind udp socket {socket_addr}: {err:?}")
+					});
+				server
+					.register_h3_listener(
+						udp_socket,
+						Duration::from_millis(downstream.timeout_ms),
+						cert_and_key,
+						downstream.dns_hostname
+					)
+					.expect("failed to register h3 downstream")
 			},
 			DownstreamConfig::Quic(downstream) => {
 				let cert_and_key =
 					load_cert_and_key(&downstream.certificate, &downstream.key)
 						.expect("failed to load certificate or private key");
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
-				let udp_socket = UdpSocket::bind(&socket_addr)
-					.await
-					.with_context(|| format!("failed to bind tcp socket {socket_addr}"))
-					.unwrap_or_else(|err| panic!("{err:?}"));
+				let udp_socket =
+					UdpSocket::bind(&socket_addr).await.unwrap_or_else(|err| {
+						panic!("failed to bind udp socket {socket_addr}: {err:?}")
+					});
 				server
 					.register_quic_listener(
 						udp_socket,
@@ -417,7 +435,7 @@ async fn async_main(config: Config) {
 						cert_and_key,
 						downstream.dns_hostname
 					)
-					.expect("failed to register tls downstream");
+					.expect("failed to register quic downstream");
 			}
 		}
 	}
@@ -473,6 +491,7 @@ enum DownstreamConfig {
 	Udp(UdpConfig),
 	Tls(TlsConfig),
 	Https(HttpsConfig),
+	H3(QuicConfig),
 	Quic(QuicConfig)
 }
 

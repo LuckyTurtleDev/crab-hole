@@ -659,7 +659,7 @@ mod tests {
 		time::Duration
 	};
 
-	use crate::{async_main, Stats};
+	use crate::async_main;
 
 	#[track_caller]
 	fn unwrap_dis<T, E: Display>(res: Result<T, E>) -> T {

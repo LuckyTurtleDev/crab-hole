@@ -6,16 +6,16 @@
 #[cfg(all(test, nightly))]
 extern crate test;
 
-#[cfg(all(test, nightly))]
-#[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
-
 mod api;
+mod blocklist;
 mod logger;
 mod parser;
+mod trie;
 
+use self::{blocklist::BlockList, logger::init_logger};
 use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
+use clap::{Parser, Subcommand};
 use directories::ProjectDirs;
 use hickory_proto::{
 	op::{header::Header, response_code::ResponseCode},
@@ -28,7 +28,9 @@ use hickory_server::{
 	ServerFuture as Server
 };
 use log::{debug, error, info, warn};
+use notify::RecursiveMode;
 use once_cell::sync::Lazy;
+use parking_lot::RwLock;
 use reqwest::Client;
 use rustls::{
 	crypto::CryptoProvider,
@@ -60,7 +62,9 @@ use tokio::{
 };
 use url::Url;
 
-use clap::{Parser, Subcommand};
+#[cfg(all(test, nightly))]
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 const CARGO_PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -108,15 +112,6 @@ static CONFIG_PATH: Lazy<PathBuf> = Lazy::new(|| {
 });
 
 static CLIENT: Lazy<Client> = Lazy::new(Client::new);
-
-mod trie;
-
-mod blocklist;
-use blocklist::BlockList;
-
-use crate::logger::init_logger;
-use notify::RecursiveMode;
-use parking_lot::RwLock;
 
 #[derive(Debug, Clone)]
 struct Stats {

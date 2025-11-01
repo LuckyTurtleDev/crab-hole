@@ -32,20 +32,22 @@ use once_cell::sync::Lazy;
 use reqwest::Client;
 use rustls::{
 	crypto::CryptoProvider,
-	server::ResolvesServerCert,
-	sign::{CertifiedKey, SingleCertAndKey}
+	server::{ClientHello, ResolvesServerCert},
+	sign::CertifiedKey
 };
 use serde::Deserialize;
 use std::{
 	env::var,
+	fmt::{self, Debug, Formatter},
 	fs::{self, File},
 	io::BufReader,
 	iter,
 	path::{Path, PathBuf},
 	sync::{
-		atomic::{AtomicU64, Ordering},
-		Arc
+		atomic::{AtomicBool, AtomicU64, Ordering},
+		mpsc, Arc
 	},
+	thread,
 	time::Duration,
 	vec
 };
@@ -113,6 +115,8 @@ mod blocklist;
 use blocklist::BlockList;
 
 use crate::logger::init_logger;
+use notify::RecursiveMode;
+use parking_lot::RwLock;
 
 #[derive(Debug, Clone)]
 struct Stats {
@@ -219,43 +223,155 @@ impl RequestHandler for Handler {
 	}
 }
 
-fn reader_for(path: &Path) -> anyhow::Result<BufReader<File>> {
-	Ok(BufReader::new(File::open(path).with_context(|| {
-		format!("Failed to open {}", path.display())
-	})?))
+/// This struct watches the certificate on the file system, and automatically re-reads it
+/// if the file changes.
+struct SelfUpdatingCertificate {
+	cert: RwLock<Arc<CertifiedKey>>,
+	cert_backup: RwLock<Arc<CertifiedKey>>,
+	use_backup: AtomicBool
 }
 
-fn load_cert_and_key(
-	cert_path: &Path,
-	key_path: &Path
-) -> anyhow::Result<Arc<impl ResolvesServerCert>> {
-	let certificates = rustls_pemfile::certs(&mut reader_for(cert_path)?)
-		.filter_map(|cert| {
-			if let Err(err) = &cert {
-				warn!("Failed to parse {}: {}", cert_path.display(), err)
-			}
-			cert.ok()
-		})
-		.collect::<Vec<_>>();
-	if certificates.is_empty() {
-		bail!("No x509 certificate found in {}", cert_path.display());
+impl SelfUpdatingCertificate {
+	fn reader_for(path: &Path) -> anyhow::Result<BufReader<File>> {
+		Ok(BufReader::new(File::open(path).with_context(|| {
+			format!("Failed to open {}", path.display())
+		})?))
 	}
-	let key = rustls_pemfile::private_key(&mut reader_for(key_path)?)
-		.with_context(|| format!("Failed to parse {}", key_path.display()))?
-		.ok_or_else(|| {
-			anyhow!(
-				"No private RSA/PKCS8/ECKey key found in {}",
-				key_path.display()
-			)
-		})?;
 
-	let certified_key = CertifiedKey::from_der(
-		certificates,
-		key,
-		CryptoProvider::get_default()
-			.expect("CryptoProvider default should have been registered in main!")
-	)?;
-	Ok(Arc::new(SingleCertAndKey::from(certified_key)))
+	fn load_cert_and_key(
+		cert_path: &Path,
+		key_path: &Path
+	) -> anyhow::Result<CertifiedKey> {
+		let certificates = rustls_pemfile::certs(&mut Self::reader_for(cert_path)?)
+			.filter_map(|cert| {
+				if let Err(err) = &cert {
+					warn!("Failed to parse {}: {}", cert_path.display(), err)
+				}
+				cert.ok()
+			})
+			.collect::<Vec<_>>();
+		if certificates.is_empty() {
+			bail!("No x509 certificate found in {}", cert_path.display());
+		}
+		let key = rustls_pemfile::private_key(&mut Self::reader_for(key_path)?)
+			.with_context(|| format!("Failed to parse {}", key_path.display()))?
+			.ok_or_else(|| {
+				anyhow!(
+					"No private RSA/PKCS8/ECKey key found in {}",
+					key_path.display()
+				)
+			})?;
+
+		Ok(CertifiedKey::from_der(
+			certificates,
+			key,
+			CryptoProvider::get_default()
+				.expect("CryptoProvider default should have been registered in main!")
+		)?)
+	}
+
+	fn new(cert_path: &Path, key_path: &Path) -> anyhow::Result<Arc<Self>> {
+		let cert = Arc::new(Self::load_cert_and_key(cert_path, key_path)?);
+		let this = Arc::new(Self {
+			cert: RwLock::new(cert.clone()),
+			cert_backup: RwLock::new(cert),
+			use_backup: AtomicBool::new(false)
+		});
+
+		// updating thread
+		{
+			let this = this.clone();
+			let cert_path = cert_path.to_owned();
+			let key_path = key_path.to_owned();
+			thread::spawn(move || {
+				let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+				let watch_result =
+					notify::recommended_watcher(tx).and_then(|mut watcher| {
+						use notify::Watcher as _;
+						watcher.watch(&cert_path, RecursiveMode::NonRecursive)?;
+						watcher.watch(&key_path, RecursiveMode::NonRecursive)
+					});
+				if let Err(err) = watch_result {
+					error!("Unable to watch certificate for changes: {err}");
+					return;
+				}
+
+				for res in rx {
+					let event = match res {
+						Ok(event) => event,
+						Err(err) => {
+							error!("Received error while watching certificate for changes: {err}");
+							continue;
+						}
+					};
+					debug!("Received certificate event: {event:?}");
+
+					// wait a few seconds, just to be sure that whoever was writing stuff
+					// into files has finished doing that
+					thread::sleep(Duration::from_secs(10));
+					info!("Re-reading certificate from disk");
+					let new_cert = match Self::load_cert_and_key(&cert_path, &key_path) {
+						Ok(new_cert) => Arc::new(new_cert),
+						Err(err) => {
+							error!("Unable to load new certificate: {err}");
+							continue;
+						}
+					};
+					// using try_write instead of waiting: nobody should be using the
+					// backup certificate at this point
+					if this.use_backup.load(Ordering::SeqCst) {
+						match this.cert.try_write() {
+							Some(mut cert) => {
+								*cert = new_cert;
+							},
+							None => {
+								error!(
+									"Unable to acquire write lock to unused certificate"
+								);
+								continue;
+							}
+						}
+					} else {
+						match this.cert_backup.try_write() {
+							Some(mut cert_backup) => {
+								*cert_backup = new_cert;
+							},
+							None => {
+								error!(
+									"Unable to acquire write lock to unused certificate"
+								);
+								continue;
+							}
+						}
+					}
+					// set the new certificate live
+					this.use_backup.fetch_not(Ordering::SeqCst);
+					info!("Successfully loaded new certificate");
+				}
+			});
+		}
+
+		Ok(this)
+	}
+}
+
+/// For some stupid reason, a [`Debug`] impl is required in order to implement
+/// [`ResolvesServerCert`].
+impl Debug for SelfUpdatingCertificate {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		f.debug_struct("SelfUpdatingCertificate")
+			.finish_non_exhaustive()
+	}
+}
+
+impl ResolvesServerCert for SelfUpdatingCertificate {
+	fn resolve(&self, _client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
+		if self.use_backup.load(Ordering::SeqCst) {
+			Some(self.cert_backup.read().clone())
+		} else {
+			Some(self.cert.read().clone())
+		}
+	}
 }
 
 /// Load a text file from url and cache it.
@@ -366,9 +482,11 @@ async fn async_main(config: Config) {
 				server.register_socket(udp_socket);
 			},
 			DownstreamConfig::Tls(downstream) => {
-				let cert_and_key =
-					load_cert_and_key(&downstream.certificate, &downstream.key)
-						.expect("failed to load certificate or private key");
+				let cert_and_key = SelfUpdatingCertificate::new(
+					&downstream.certificate,
+					&downstream.key
+				)
+				.expect("failed to load certificate or private key");
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
 				let tcp_listener = TcpListener::bind(&socket_addr)
 					.await
@@ -383,9 +501,11 @@ async fn async_main(config: Config) {
 					.expect("failed to register tls downstream");
 			},
 			DownstreamConfig::Https(downstream) => {
-				let cert_and_key =
-					load_cert_and_key(&downstream.certificate, &downstream.key)
-						.expect("failed to load certificate or private key");
+				let cert_and_key = SelfUpdatingCertificate::new(
+					&downstream.certificate,
+					&downstream.key
+				)
+				.expect("failed to load certificate or private key");
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
 				let tcp_listener =
 					TcpListener::bind(&socket_addr).await.unwrap_or_else(|err| {
@@ -402,9 +522,11 @@ async fn async_main(config: Config) {
 					.expect("failed to register https downstream");
 			},
 			DownstreamConfig::H3(downstream) => {
-				let cert_and_key =
-					load_cert_and_key(&downstream.certificate, &downstream.key)
-						.expect("failed to load certificate or private key");
+				let cert_and_key = SelfUpdatingCertificate::new(
+					&downstream.certificate,
+					&downstream.key
+				)
+				.expect("failed to load certificate or private key");
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
 				let udp_socket =
 					UdpSocket::bind(&socket_addr).await.unwrap_or_else(|err| {
@@ -420,9 +542,11 @@ async fn async_main(config: Config) {
 					.expect("failed to register h3 downstream")
 			},
 			DownstreamConfig::Quic(downstream) => {
-				let cert_and_key =
-					load_cert_and_key(&downstream.certificate, &downstream.key)
-						.expect("failed to load certificate or private key");
+				let cert_and_key = SelfUpdatingCertificate::new(
+					&downstream.certificate,
+					&downstream.key
+				)
+				.expect("failed to load certificate or private key");
 				let socket_addr = format!("{}:{}", downstream.listen, downstream.port);
 				let udp_socket =
 					UdpSocket::bind(&socket_addr).await.unwrap_or_else(|err| {

@@ -685,50 +685,50 @@ mod tests {
 	/// which have a comment `<!-- test_config -->` at the previous line
 	fn readme_config() {
 		#[derive(Debug, PartialEq)]
-		enum PraseState {
+		enum ParseState {
 			Nothing,
 			FoundComment,
 			ConfigFile
 		}
 
 		let readme = include_bytes!("../README.md");
-		let mut prase_state = PraseState::Nothing;
+		let mut parse_state = ParseState::Nothing;
 		let mut config_files: Vec<String> = Default::default();
 		let mut current_config_files: String = Default::default();
 		for line in readme.lines() {
 			let line = line.unwrap();
 			let line = line.trim();
 			if line == "<!-- test_config -->" {
-				if prase_state != PraseState::Nothing {
-					panic!("prase readme error:\nfound test comment while not in state PraseState::Nothing\nIs in state {prase_state:?}");
+				if parse_state != ParseState::Nothing {
+					panic!("parse readme error:\nfound test comment while not in state ParseState::Nothing\nIs in state {parse_state:?}");
 				}
-				prase_state = PraseState::FoundComment;
+				parse_state = ParseState::FoundComment;
 				continue;
 			}
-			if line.starts_with("```") && prase_state == PraseState::FoundComment {
-				prase_state = PraseState::ConfigFile;
+			if line.starts_with("```") && parse_state == ParseState::FoundComment {
+				parse_state = ParseState::ConfigFile;
 				continue;
 			}
-			if line.starts_with("```") && prase_state == PraseState::ConfigFile {
-				prase_state = PraseState::Nothing;
+			if line.starts_with("```") && parse_state == ParseState::ConfigFile {
+				parse_state = ParseState::Nothing;
 				config_files.push(take(&mut current_config_files));
 				continue;
 			}
-			if prase_state == PraseState::ConfigFile {
+			if parse_state == ParseState::ConfigFile {
 				current_config_files.push_str(line);
 				current_config_files.push('\n');
 			}
 		}
-		if prase_state != PraseState::Nothing {
-			panic!("prase readme error:\nUnexpected end of file. Praser is still in state {prase_state:?}");
+		if parse_state != ParseState::Nothing {
+			panic!("parse readme error:\nUnexpected end of file. Parser is still in state {parse_state:?}");
 		}
 		if config_files.is_empty() {
 			panic!("no config files found at README.md");
 		}
 		println!("found {} configs in readme", config_files.len());
 		for (i, config) in config_files.iter().enumerate() {
-			println!("\n\nprase {}. config", i + 1);
-			println!("prase:\n{config}");
+			println!("\n\nparse {}. config", i + 1);
+			println!("parse:\n{config}");
 			let _: super::Config = unwrap_dis(toml::from_str(config));
 		}
 	}

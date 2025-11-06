@@ -8,8 +8,7 @@ lists = [
 
 # optional
 [api]
-port = 8080
-listen = "127.0.0.1"
+listener = "/home/lukas/test.tmp"
 # optional (default = false)
 show_doc = true # OpenAPI doc loads content from third party websites
 # optional

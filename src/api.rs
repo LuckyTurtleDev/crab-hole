@@ -3,7 +3,11 @@ use crate::{
 	CARGO_PKG_NAME, CARGO_PKG_VERSION
 };
 use log::info;
-use poem::{http::StatusCode, listener::TcpListener, Route, Server};
+use poem::{
+	http::StatusCode,
+	listener::{self, TcpListener, UnixListener},
+	Route, Server
+};
 use poem_openapi::{
 	auth::ApiKey,
 	param::Query,
@@ -14,15 +18,18 @@ use poem_openapi::{
 use serde::Deserialize;
 use std::{
 	collections::HashMap,
+	fs::FileType,
+	os::{self, unix::fs::FileTypeExt},
+	path::Path,
 	sync::{atomic::Ordering, Arc}
 };
 use time::OffsetDateTime;
+use tokio::fs::remove_file;
 
 #[derive(Debug, Deserialize, Object)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Config {
-	port: u16,
-	listen: String,
+	listener: String,
 	#[serde(default)]
 	show_doc: bool,
 	admin_key: Option<String>
@@ -196,7 +203,6 @@ pub(crate) async fn init(
 	blocklist: Arc<BlockList>
 ) -> anyhow::Result<()> {
 	if let Some(config) = config {
-		let address = format!("{}:{}", config.listen, config.port);
 		let api_data = Api {
 			blocklist,
 			doc_enable: config.show_doc,
@@ -205,7 +211,7 @@ pub(crate) async fn init(
 		};
 		let api_service =
 			OpenApiService::new(api_data, CARGO_PKG_NAME, CARGO_PKG_VERSION)
-				.server(&address);
+				.server(&config.listener);
 		let doc = if config.show_doc {
 			Some(api_service.redoc())
 		} else {
@@ -217,8 +223,26 @@ pub(crate) async fn init(
 		} else {
 			server
 		};
-		info!("start api/web server at {address:?}");
-		Server::new(TcpListener::bind(address)).run(server).await?;
+		info!("start api/web server at {:?}", config.listener);
+		if let Some(listener) = config.listener.strip_prefix("unix://") {
+			// Old sockets get left behind, so cleanup
+			let path = Path::new(listener);
+			if path.exists() {
+				// enusre that the file is really an unix socket and we do not delte something important
+				let file = std::fs::File::open(path).unwrap();
+				if file.metadata().unwrap().file_type().is_socket() {
+					remove_file(&path).await.unwrap();
+				}
+			}
+			Server::new(UnixListener::bind(listener))
+				.run(server)
+				.await?;
+			//todo remove file
+		} else {
+			Server::new(TcpListener::bind(config.listener))
+				.run(server)
+				.await?;
+		}
 	}
 	Ok(())
 }

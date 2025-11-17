@@ -6,7 +6,7 @@ use anyhow::Context;
 use log::info;
 use poem::{
 	http::StatusCode,
-	listener::{self, TcpListener, UnixListener},
+	listener::{TcpListener, UnixListener},
 	Route, Server
 };
 use poem_openapi::{
@@ -19,8 +19,7 @@ use poem_openapi::{
 use serde::Deserialize;
 use std::{
 	collections::HashMap,
-	fs::FileType,
-	os::{self, unix::fs::FileTypeExt},
+	os::unix::fs::FileTypeExt,
 	path::Path,
 	sync::{atomic::Ordering, Arc}
 };

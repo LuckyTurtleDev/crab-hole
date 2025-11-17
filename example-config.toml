@@ -10,8 +10,7 @@ allow_list = ["file:///allowed.txt"]
 
 # optional
 [api]
-port = 8080
-listen = "127.0.0.1"
+listener = "127.0.0.1:8080"
 # optional (default = false)
 show_doc = true # OpenAPI doc loads content from third party websites
 # optional

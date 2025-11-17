@@ -59,8 +59,9 @@ allow_list = ["file:///allowed.txt"]
 
 # optional
 [api]
-port = 8080
-listen = "127.0.0.1"
+listener = "127.0.0.1:8080"
+# to use unix sockets, start listener with `unix://` 
+#listener = "unix:///tmp/crab-hole.sock"
 # optional (default = false)
 show_doc = true # OpenAPI doc loads content from third party websites
 # optional

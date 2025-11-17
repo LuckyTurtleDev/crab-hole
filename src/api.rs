@@ -222,7 +222,7 @@ pub(crate) async fn init(
 		if let Some(listener) = config.listener.strip_prefix("unix://") {
 			#[cfg(not(unix))]
 			{
-				anyhow::bail!("UnixListener is only supported on unix systems");
+				anyhow::bail!("unix sockets is only supported on unix systems");
 			}
 			#[cfg(unix)]
 			{

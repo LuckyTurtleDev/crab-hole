@@ -4,11 +4,7 @@ use crate::{
 };
 use anyhow::Context;
 use log::info;
-use poem::{
-	http::StatusCode,
-	listener::{TcpListener, UnixListener},
-	Route, Server
-};
+use poem::{http::StatusCode, listener::TcpListener, Route, Server};
 use poem_openapi::{
 	auth::ApiKey,
 	param::Query,
@@ -230,7 +226,9 @@ pub(crate) async fn init(
 			}
 			#[cfg(unix)]
 			{
+				use poem::listener::UnixListener;
 				use std::os::unix::fs::FileTypeExt;
+
 				// Old sockets get left behind, so cleanup
 				let path = Path::new(listener);
 				if path.exists() {
@@ -247,11 +245,11 @@ pub(crate) async fn init(
 						})?;
 					}
 				}
+				Server::new(UnixListener::bind(listener))
+					.run(server)
+					.await?;
+				//todo remove file at drop
 			}
-			Server::new(UnixListener::bind(listener))
-				.run(server)
-				.await?;
-			//todo remove file at drop
 		} else {
 			Server::new(TcpListener::bind(config.listener))
 				.run(server)

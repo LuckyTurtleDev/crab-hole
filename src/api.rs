@@ -19,7 +19,6 @@ use poem_openapi::{
 use serde::Deserialize;
 use std::{
 	collections::HashMap,
-	os::unix::fs::FileTypeExt,
 	path::Path,
 	sync::{atomic::Ordering, Arc}
 };
@@ -225,20 +224,28 @@ pub(crate) async fn init(
 		};
 		info!("start api/web server at {:?}", config.listener);
 		if let Some(listener) = config.listener.strip_prefix("unix://") {
-			// Old sockets get left behind, so cleanup
-			let path = Path::new(listener);
-			if path.exists() {
-				// enusre that the file is really an unix socket and we do not delte something important
-				let file = std::fs::File::open(path).unwrap();
-				if file
-					.metadata()
-					.with_context(|| format!("failed to open file {path:?}"))?
-					.file_type()
-					.is_socket()
-				{
-					remove_file(&path).await.with_context(|| {
-						format!("failed to remove existing socket {path:?}")
-					})?;
+			#[cfg(not(unix))]
+			{
+				anyhow::bail!("UnixListener is only supported on unix systems");
+			}
+			#[cfg(unix)]
+			{
+				use std::os::unix::fs::FileTypeExt;
+				// Old sockets get left behind, so cleanup
+				let path = Path::new(listener);
+				if path.exists() {
+					// enusre that the file is really an unix socket and we do not delte something important
+					let file = std::fs::File::open(path).unwrap();
+					if file
+						.metadata()
+						.with_context(|| format!("failed to open file {path:?}"))?
+						.file_type()
+						.is_socket()
+					{
+						remove_file(&path).await.with_context(|| {
+							format!("failed to remove existing socket {path:?}")
+						})?;
+					}
 				}
 			}
 			Server::new(UnixListener::bind(listener))

@@ -231,8 +231,15 @@ pub(crate) async fn init(
 			if path.exists() {
 				// enusre that the file is really an unix socket and we do not delte something important
 				let file = std::fs::File::open(path).unwrap();
-				if file.metadata().with_context(|| format!("failed to open file {path:?}"))?.file_type().is_socket() {
-					remove_file(&path).await.with_context(|| format!("failed to remove existing socket {path:?}"))?;
+				if file
+					.metadata()
+					.with_context(|| format!("failed to open file {path:?}"))?
+					.file_type()
+					.is_socket()
+				{
+					remove_file(&path).await.with_context(|| {
+						format!("failed to remove existing socket {path:?}")
+					})?;
 				}
 			}
 			Server::new(UnixListener::bind(listener))

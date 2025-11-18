@@ -349,7 +349,7 @@ async fn get_file(
 }
 
 #[tokio::main]
-async fn async_main(config: Config) -> anyhow::Result<()>{
+async fn async_main(config: Config) -> anyhow::Result<()> {
 	let stats = Stats::default();
 	let handler = Handler::new(&config, stats.clone()).await;
 	let blocklist = handler.blocklist.clone();

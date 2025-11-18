@@ -15,11 +15,10 @@ use poem_openapi::{
 use serde::Deserialize;
 use std::{
 	collections::HashMap,
-	path::Path,
+	path::{Path, PathBuf},
 	sync::{atomic::Ordering, Arc}
 };
 use time::OffsetDateTime;
-use tokio::fs::remove_file;
 
 #[derive(Debug, Deserialize, Object)]
 #[serde(deny_unknown_fields)]
@@ -227,28 +226,31 @@ pub(crate) async fn init(
 			#[cfg(unix)]
 			{
 				use poem::listener::UnixListener;
-				use std::os::unix::fs::FileTypeExt;
+				use std::fs::remove_file;
 
-				// Old sockets get left behind, so cleanup
-				let path = Path::new(listener);
-				if path.exists() {
-					// enusre that the file is really an unix socket and we do not delte something important
-					let file = std::fs::File::open(path).unwrap();
-					if file
-						.metadata()
-						.with_context(|| format!("failed to open file {path:?}"))?
-						.file_type()
-						.is_socket()
-					{
-						remove_file(&path).await.with_context(|| {
-							format!("failed to remove existing socket {path:?}")
-						})?;
+				/// Delete the given file on drop
+				struct FileDeleter(PathBuf);
+				impl Drop for FileDeleter {
+					fn drop(&mut self) {
+						if let Err(err) = remove_file(&self.0).with_context(|| {
+							format!("failed to remove file {:?}", self.0)
+						}) {
+							eprintln!("{err:?}");
+						}
 					}
 				}
+
+				let path = Path::new(listener);
+				// If socket not exist at start, we want to delte it after existing the program.
+				// If it already exist it was probally created by a service like systemd so we wan to keep it then.
+				let _delete_file = if path.exists() {
+					None
+				} else {
+					Some(FileDeleter(path.to_owned()))
+				};
 				Server::new(UnixListener::bind(listener))
 					.run(server)
 					.await?;
-				//todo remove file at drop
 			}
 		} else {
 			Server::new(TcpListener::bind(config.listener))

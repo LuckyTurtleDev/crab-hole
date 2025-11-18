@@ -349,7 +349,7 @@ async fn get_file(
 }
 
 #[tokio::main]
-async fn async_main(config: Config) {
+async fn async_main(config: Config) -> anyhow::Result<()>{
 	let stats = Stats::default();
 	let handler = Handler::new(&config, stats.clone()).await;
 	let blocklist = handler.blocklist.clone();
@@ -450,7 +450,7 @@ async fn async_main(config: Config) {
 		}
 	});
 	info!("🚀 start dns server");
-	let res = try_join!(
+	try_join!(
 		async {
 			server
 				.block_until_done()
@@ -462,8 +462,8 @@ async fn async_main(config: Config) {
 				.await
 				.with_context(|| "failed to start api/web server")
 		}
-	);
-	res.unwrap();
+	)?;
+	Ok(())
 }
 
 #[derive(Debug, Deserialize)]
@@ -561,7 +561,7 @@ enum Commands {
 	ValidateLists
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
 	init_logger();
 	info!("🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
 	Lazy::force(&CONFIG_PATH);
@@ -595,15 +595,15 @@ fn main() {
 			Commands::ValidateConfig => info!("Config is valid"),
 			Commands::ValidateLists => {
 				if !async_validate_lists(config) {
-					error!("Config validation failed!");
-					std::process::exit(1);
+					bail!("Config validation failed!");
 				} else {
 					info!("All lists are valid");
 				}
 			},
 		},
-		None => async_main(config)
-	}
+		None => async_main(config)?
+	};
+	Ok(())
 }
 
 fn load_config() -> Result<Config, anyhow::Error> {

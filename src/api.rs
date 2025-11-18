@@ -232,6 +232,7 @@ pub(crate) async fn init(
 				struct FileDeleter(PathBuf);
 				impl Drop for FileDeleter {
 					fn drop(&mut self) {
+						info!("delete socket: {:?}", self.0);
 						if let Err(err) = remove_file(&self.0).with_context(|| {
 							format!("failed to remove file {:?}", self.0)
 						}) {
@@ -243,7 +244,7 @@ pub(crate) async fn init(
 				let path = Path::new(listener);
 				// If socket not exist at start, we want to delte it after existing the program.
 				// If it already exist it was probally created by a service like systemd so we wan to keep it then.
-				let _delete_file = if path.exists() {
+				let delete_file = if path.exists() {
 					None
 				} else {
 					Some(FileDeleter(path.to_owned()))
@@ -251,6 +252,7 @@ pub(crate) async fn init(
 				Server::new(UnixListener::bind(listener))
 					.run(server)
 					.await?;
+				drop(delete_file);
 			}
 		} else {
 			Server::new(TcpListener::bind(config.listener))

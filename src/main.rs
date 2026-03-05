@@ -571,7 +571,7 @@ enum Commands {
 	ValidateLists
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> ExitCode {
 	init_logger();
 	info!("🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
 	Lazy::force(&CONFIG_PATH);
@@ -602,18 +602,22 @@ fn main() -> anyhow::Result<()> {
 
 	match cli.command {
 		Some(command) => match command {
-			Commands::ValidateConfig => info!("Config is valid"),
+			Commands::ValidateConfig => {
+				info!("Config is valid");
+				ExitCode::SUCCESS
+			},
 			Commands::ValidateLists => {
 				if !async_validate_lists(config) {
-					bail!("Config validation failed!");
+					error!("Config validation failed!");
+					ExitCode::FAILURE
 				} else {
 					info!("All lists are valid");
+					ExitCode::SUCCESS
 				}
 			},
 		},
-		None => async_main(config)?
-	};
-	Ok(())
+		None => async_main(config)
+	}
 }
 
 fn load_config() -> Result<Config, anyhow::Error> {

@@ -242,8 +242,8 @@ pub(crate) async fn init(
 				}
 
 				let path = Path::new(listener);
-				// If socket not exist at start, we want to delte it after existing the program.
-				// If it already exist it was probally created by a service like systemd so we wan to keep it then.
+				// If the socket doesn't exist yet, we want to delete it after exiting the program.
+				// If it already existed, it was probally created by a service like systemd, so we want to keep it.
 				let delete_file = if path.exists() {
 					None
 				} else {

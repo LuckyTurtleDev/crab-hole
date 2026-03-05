@@ -42,6 +42,7 @@ use std::{
 	io::BufReader,
 	iter,
 	path::{Path, PathBuf},
+	process::ExitCode,
 	sync::{
 		atomic::{AtomicU64, Ordering},
 		Arc
@@ -349,7 +350,7 @@ async fn get_file(
 }
 
 #[tokio::main]
-async fn async_main(config: Config) -> anyhow::Result<()> {
+async fn async_main(config: Config) -> ExitCode {
 	let stats = Stats::default();
 	let handler = Handler::new(&config, stats.clone()).await;
 	let blocklist = handler.blocklist.clone();
@@ -450,7 +451,7 @@ async fn async_main(config: Config) -> anyhow::Result<()> {
 		}
 	});
 	info!("🚀 start dns server");
-	try_join!(
+	let res = try_join!(
 		async {
 			server
 				.block_until_done()
@@ -462,8 +463,17 @@ async fn async_main(config: Config) -> anyhow::Result<()> {
 				.await
 				.with_context(|| "failed to start api/web server")
 		}
-	)?;
-	Ok(())
+	);
+	match res {
+		Ok(_) => {
+			info!("🛑 stop dns server");
+			ExitCode::SUCCESS
+		},
+		Err(err) => {
+			error!("🛑 dns server produced an irrecoverable error: {err}");
+			ExitCode::FAILURE
+		}
+	}
 }
 
 #[derive(Debug, Deserialize)]

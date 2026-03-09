@@ -21,15 +21,13 @@ native-roots = ["hickory-resolver/rustls-platform-verifier", "reqwest/rustls-tls
 webpki-roots = ["hickory-resolver/webpki-roots", "reqwest/rustls-tls-webpki-roots"]
 ring = ["hickory-server/dnssec-ring", "hickory-server/tls-ring", "hickory-server/https-ring", "hickory-server/quic-ring", "hickory-server/h3-ring"]
 aws-lc-rs = ["hickory-server/dnssec-aws-lc-rs", "hickory-server/tls-aws-lc-rs", "hickory-server/https-aws-lc-rs", "hickory-server/quic-aws-lc-rs", "hickory-server/h3-aws-lc-rs"]
-# internal debugging feature for the parser
-__debug_parser = []
 
 [dependencies]
 anyhow = "1.0.100"
-ariadne = "0.3"
+ariadne = "0.6"
 async-trait = "0.1"
 bit-vec = "0.8.0"
-chumsky = "0.9.3"
+chumsky = "0.12"
 clap = { version = "4.5.49", features = ["derive"] }
 directories = "6.0.0"
 hickory-proto = { version = "0.25.2", default-features = false }

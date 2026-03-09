@@ -1,38 +1,26 @@
-use ariadne::{Label, Report, ReportKind, Source};
-use chumsky::{error::SimpleReason, prelude::*};
-use std::{fmt::Display, net::IpAddr};
+use ariadne::{Color, Label, Report, ReportKind, Source};
+use chumsky::prelude::*;
+use std::net::IpAddr;
 
-type ParserError = Simple<char>;
-type Span = <ParserError as chumsky::error::Error<char>>::Span;
+type Extra<'a> = extra::Err<Rich<'a, char>>;
 
-fn convert_error<E>(err: E, span: Span) -> ParserError
-where
-	E: Display
-{
-	ParserError::custom(span, format!("{err}"))
+fn ident<'a>() -> impl Parser<'a, &'a str, &'a str, Extra<'a>> {
+	any()
+		.filter(|c: &char| *c != '#' && *c != ':' && *c != '.' && !c.is_whitespace())
+		.repeated()
+		.at_least(1)
+		.to_slice()
 }
 
 /// A domain. Never contains a trailing punct.
 pub(crate) struct Domain(pub(crate) String);
 
 impl Domain {
-	fn parser() -> impl Parser<char, Self, Error = ParserError> {
-		let ident =
-			filter(|c: &char| *c != '#' && *c != ':' && *c != '.' && !c.is_whitespace())
-				.repeated()
-				.at_least(1);
-		ident
-			.then(just(".").then(ident).repeated())
+	fn parser<'a>() -> impl Parser<'a, &'a str, Self, Extra<'a>> {
+		ident()
+			.then(just(".").then(ident()).repeated().to_slice())
 			.then_ignore(just(".").ignored().or(empty()))
-			.map(|(first, tail)| {
-				let mut domain: String = first.into_iter().collect();
-				for (punct, part) in tail {
-					domain += punct;
-					domain.extend(part.into_iter());
-				}
-				Self(domain)
-			})
-			.debug("Domain parser")
+			.map(|(first, tail)| Self(format!("{first}{tail}")))
 	}
 }
 
@@ -43,58 +31,25 @@ pub(crate) struct Blocklist {
 pub(crate) struct ParseError<'a> {
 	input: &'a str,
 	path_str: &'a str,
-	err: Vec<ParserError>
+	err: Vec<Rich<'a, char>>
 }
 
-fn report_err(buf: &str, path_str: &str, err: Vec<ParserError>) -> String {
+fn report_err(buf: &str, path_str: &str, err: Vec<Rich<'_, char>>) -> String {
 	let mut output = Vec::<u8>::new();
 	for e in err {
-		let mut report = Report::build(ReportKind::Error, path_str, e.span().start);
-		match (e.reason(), e.found()) {
-			(SimpleReason::Unexpected, Some(found)) => {
-				report.set_message("Unexpected token");
-				report.add_label(
-					Label::new((path_str, e.span()))
-						.with_message(format!("Unexpected token {found}"))
-				);
-				if e.expected().len() > 0 {
-					report.set_note(format!(
-						"Expected {}",
-						e.expected()
-							.map(|ex| match ex {
-								Some(ex) => format!("{ex:?}"),
-								None => "end of file".to_owned()
-							})
-							.collect::<Vec<_>>()
-							.join(", ")
-					));
-				}
-			},
-
-			(SimpleReason::Unexpected, None) => {
-				report.set_message("Unexpected end of file");
-			},
-
-			(SimpleReason::Unclosed { span, delimiter }, found) => {
-				report.set_message("Unclosed delimiter");
-				report.add_label(
-					Label::new((path_str, span.clone()))
-						.with_message(format!("Unclosed delimiter {delimiter}"))
-				);
-				if let Some(found) = found {
-					report.add_label(
-						Label::new((path_str, e.span()))
-							.with_message(format!("Must be closed before this {found}"))
-					);
-				}
-			},
-
-			(SimpleReason::Custom(msg), _) => {
-				report.set_message(msg);
-				report.add_label(Label::new((path_str, e.span())).with_message(msg));
-			}
-		};
-		report
+		Report::build(ReportKind::Error, (path_str, e.span().into_range()))
+			.with_config(ariadne::Config::new().with_index_type(ariadne::IndexType::Byte))
+			.with_message(e.to_string())
+			.with_label(
+				Label::new((path_str, e.span().into_range()))
+					.with_message(e.reason().to_string())
+					.with_color(Color::Red)
+			)
+			.with_labels(e.contexts().map(|(label, span)| {
+				Label::new((path_str, span.into_range()))
+					.with_message(format!("while parsing this {label}"))
+					.with_color(Color::Yellow)
+			}))
 			.finish()
 			.write((path_str, Source::from(buf)), &mut output)
 			.unwrap();
@@ -114,24 +69,22 @@ pub(crate) type ParseResult<'a, T> = Result<T, ParseError<'a>>;
 impl Blocklist {
 	pub(crate) fn parse<'a>(path: &'a str, input: &'a str) -> ParseResult<'a, Self> {
 		let parser = Self::parser();
-		#[cfg(feature = "__debug_parser")]
-		let result = parser.parse_recovery_verbose(input);
-		#[cfg(not(feature = "__debug_parser"))]
-		let result = parser.parse_recovery(input);
-		match result {
-			(Some(value), errs) if errs.is_empty() => Ok(value),
-			(_, errs) => Err(ParseError {
+		let result = parser.parse(input);
+		if result.has_errors() {
+			return Err(ParseError {
 				input,
 				path_str: path,
-				err: errs
-			})
+				err: result.into_errors()
+			});
 		}
+		Ok(result.into_output().unwrap())
 	}
 
-	fn parser() -> impl Parser<char, Self, Error = ParserError> {
+	fn parser<'a>() -> impl Parser<'a, &'a str, Self, Extra<'a>> {
 		Line::parser()
 			.then_ignore(one_of(['\r', '\n']).repeated().at_least(1))
 			.repeated()
+			.collect::<Vec<_>>()
 			.then(Line::parser())
 			.then_ignore(one_of(['\r', '\n']).repeated())
 			.then_ignore(end())
@@ -141,20 +94,19 @@ impl Blocklist {
 					entries: entries.into_iter().flatten().collect()
 				}
 			})
-			.debug("Blocklist parser")
 	}
 }
 
 struct Comment;
 
 impl Comment {
-	fn parser() -> impl Parser<char, Self, Error = ParserError> {
-		filter(|c: &char| c.is_whitespace())
+	fn parser<'a>() -> impl Parser<'a, &'a str, Self, Extra<'a>> {
+		any()
+			.filter(|c: &char| c.is_whitespace())
 			.repeated()
 			.ignore_then(just("#"))
 			.ignore_then(none_of(['\r', '\n']).repeated())
 			.map(|_| Self)
-			.debug("Comment parser")
 	}
 }
 
@@ -174,27 +126,27 @@ impl Line {
 		}
 	}
 
-	fn parser() -> impl Parser<char, Option<Self>, Error = ParserError> {
+	fn parser<'a>() -> impl Parser<'a, &'a str, Option<Self>, Extra<'a>> {
 		choice((
 			// [<ip>][%<iface>] <domain>
 			choice((
-				filter(|c: &char| c.is_ascii_hexdigit() || *c == '.' || *c == ':')
+				any()
+					.filter(|c: &char| c.is_ascii_hexdigit() || *c == '.' || *c == ':')
 					.repeated()
 					.at_least(2)
-					.try_map(|ip, span| {
-						Ok(Some(
-							ip.into_iter()
-								.collect::<String>()
-								.parse()
-								.map_err(|err| convert_error(err, span))?
-						))
+					.to_slice()
+					.try_map(|ip: &str, span| {
+						Ok(Some(ip.parse().map_err(|err| Rich::custom(span, err))?))
 					})
 					.then(choice((
 						just("%")
 							.ignore_then(
-								filter(|c: &char| c.is_ascii_alphanumeric()).repeated()
+								any()
+									.filter(|c: &char| c.is_ascii_alphanumeric())
+									.repeated()
+									.to_slice()
 							)
-							.map(|iface| Some(iface.into_iter().collect::<String>())),
+							.map(|iface: &str| Some(iface.into())),
 						empty().map(|_| None)
 					)))
 					.then_ignore(one_of([' ', '\t']).repeated().at_least(1)),
@@ -209,19 +161,12 @@ impl Line {
 					_ => unreachable!()
 				})
 			})
-			.then_ignore(choice((Comment::parser().ignored(), empty())))
-			.debug("Line parser: IpDomain"),
+			.then_ignore(choice((Comment::parser().ignored(), empty()))),
 			// full line comment
-			Comment::parser()
-				.map(|_| None)
-				.debug("Line parser: Comment"),
+			Comment::parser().map(|_| None),
 			// empty line
-			one_of([' ', '\t'])
-				.repeated()
-				.map(|_| None)
-				.debug("Line parser: Empty")
+			one_of([' ', '\t']).repeated().map(|_| None)
 		))
-		.debug("Line parser")
 	}
 }
 

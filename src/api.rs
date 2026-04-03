@@ -3,7 +3,7 @@ use crate::{
 	CARGO_PKG_NAME, CARGO_PKG_VERSION
 };
 use anyhow::Context;
-use log::info;
+use log::{error, info};
 use poem::{http::StatusCode, listener::TcpListener, Route, Server};
 use poem_openapi::{
 	auth::ApiKey,
@@ -236,7 +236,7 @@ pub(crate) async fn init(
 						if let Err(err) = remove_file(&self.0).with_context(|| {
 							format!("failed to remove file {:?}", self.0)
 						}) {
-							eprintln!("{err:?}");
+							error!("{err:?}");
 						}
 					}
 				}

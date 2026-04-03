@@ -453,18 +453,18 @@ async fn async_main(config: Config) -> anyhow::Result<()> {
 	info!("🚀 start dns server");
 
 	select! {
-		 res = async {
+		res = async {
 			server
 				.block_until_done()
 				.await
 				.with_context(|| "failed to start dns server")
 		} => {res}
-		 res = async {
+		res = async {
 			api::init(config.api, stats, blocklist)
 				.await
 				.with_context(|| "failed to start api/web server")
 		}, if config.api.is_some() => {res} //on none init return directly
-		 res  = async {
+		res = async {
 			signal::ctrl_c().await.context("failed to listen for signal")
 		} => {res}
 	}?;

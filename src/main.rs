@@ -465,7 +465,7 @@ async fn async_main(config: Config) -> anyhow::Result<()> {
 			api::init(config.api, stats, blocklist, shutdown.clone())
 				.await
 				.with_context(|| "failed to start api/web server")
-		} => {res}
+		}, if config.api.is_some() => {res} //on none init return directly
 		 res  = async {
 			signal::ctrl_c().await.context("failed to listen for signal")
 		} => {res}

@@ -54,9 +54,10 @@ use time::OffsetDateTime;
 use tokio::{
 	fs::{read_to_string, write},
 	net::{TcpListener, UdpSocket},
-	time::sleep,
-	try_join
+	select, signal,
+	time::sleep
 };
+use tokio_util::sync::CancellationToken;
 use url::Url;
 
 use clap::{Parser, Subcommand};
@@ -350,7 +351,7 @@ async fn get_file(
 }
 
 #[tokio::main]
-async fn async_main(config: Config) -> ExitCode {
+async fn async_main(config: Config) -> anyhow::Result<()> {
 	let stats = Stats::default();
 	let handler = Handler::new(&config, stats.clone()).await;
 	let blocklist = handler.blocklist.clone();
@@ -451,29 +452,25 @@ async fn async_main(config: Config) -> ExitCode {
 		}
 	});
 	info!("🚀 start dns server");
-	let res = try_join!(
-		async {
+	let shutdown = CancellationToken::new();
+
+	select! {
+		 res = async {
 			server
 				.block_until_done()
 				.await
 				.with_context(|| "failed to start dns server")
-		},
-		async {
-			api::init(config.api, stats, blocklist)
+		} => {res}
+		 res = async {
+			api::init(config.api, stats, blocklist, shutdown.clone())
 				.await
 				.with_context(|| "failed to start api/web server")
-		}
-	);
-	match res {
-		Ok(_) => {
-			info!("🛑 stop dns server");
-			ExitCode::SUCCESS
-		},
-		Err(err) => {
-			error!("🛑 dns server produced an irrecoverable error: {err}");
-			ExitCode::FAILURE
-		}
-	}
+		} => {res}
+		 res  = async {
+			signal::ctrl_c().await.context("failed to listen for signal")
+		} => {res}
+	}?;
+	Ok(())
 }
 
 #[derive(Debug, Deserialize)]
@@ -616,7 +613,16 @@ fn main() -> ExitCode {
 				}
 			},
 		},
-		None => async_main(config)
+		None => match async_main(config) {
+			Ok(_) => {
+				info!("🛑 stop dns server");
+				ExitCode::SUCCESS
+			},
+			Err(err) => {
+				error!("🛑 crab-hole produced an irrecoverable error:\n{err:?}");
+				ExitCode::FAILURE
+			}
+		}
 	}
 }
 

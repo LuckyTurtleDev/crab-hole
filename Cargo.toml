@@ -49,6 +49,7 @@ time = { version = "0.3.44", features = ["macros"] } #poem-openapi have forgot t
 tokio = { version = "1.48", features = ["fs", "parking_lot", "rt-multi-thread", "macros", "net", "signal"] }
 toml = { package = "basic-toml", version = "0.1" }
 url = { version = "2.5.7", features = ["serde"] }
+tokio-util = { version = "0.7.18", features = ["rt"] }
 
 [dev-dependencies]
 indoc = "2.0.6"

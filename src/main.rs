@@ -57,7 +57,6 @@ use tokio::{
 	select, signal,
 	time::sleep
 };
-use tokio_util::sync::CancellationToken;
 use url::Url;
 
 use clap::{Parser, Subcommand};
@@ -452,7 +451,6 @@ async fn async_main(config: Config) -> anyhow::Result<()> {
 		}
 	});
 	info!("🚀 start dns server");
-	let shutdown = CancellationToken::new();
 
 	select! {
 		 res = async {
@@ -462,7 +460,7 @@ async fn async_main(config: Config) -> anyhow::Result<()> {
 				.with_context(|| "failed to start dns server")
 		} => {res}
 		 res = async {
-			api::init(config.api, stats, blocklist, shutdown.clone())
+			api::init(config.api, stats, blocklist)
 				.await
 				.with_context(|| "failed to start api/web server")
 		}, if config.api.is_some() => {res} //on none init return directly

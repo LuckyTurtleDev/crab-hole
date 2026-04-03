@@ -19,7 +19,6 @@ use std::{
 	sync::{atomic::Ordering, Arc}
 };
 use time::OffsetDateTime;
-use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Deserialize, Object)]
 #[serde(deny_unknown_fields)]
@@ -195,8 +194,7 @@ impl Api {
 pub(crate) async fn init(
 	config: Option<Config>,
 	stats: crate::Stats,
-	blocklist: Arc<BlockList>,
-	shutdown: CancellationToken
+	blocklist: Arc<BlockList>
 ) -> anyhow::Result<()> {
 	if let Some(config) = config {
 		let api_data = Api {
@@ -251,12 +249,9 @@ pub(crate) async fn init(
 				} else {
 					Some(FileDeleter(path.to_owned()))
 				};
-				tokio::select! {
-					res = Server::new(UnixListener::bind(listener))
-					.run(server) => {res?},
-					// continue if we recieve a shutdown signal
-					_ = shutdown.cancelled() => {}
-				};
+				Server::new(UnixListener::bind(listener))
+					.run(server)
+					.await?;
 				drop(delete_file);
 			}
 		} else {

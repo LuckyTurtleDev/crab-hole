@@ -23,10 +23,10 @@ use time::OffsetDateTime;
 #[derive(Debug, Deserialize, Object)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Config {
-	listener: String,
+	pub listener: String,
 	#[serde(default)]
-	show_doc: bool,
-	admin_key: Option<String>
+	pub show_doc: bool,
+	pub admin_key: Option<String>
 }
 
 #[derive(Debug, Object)]

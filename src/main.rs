@@ -755,8 +755,15 @@ mod tests {
 	#[ignore]
 	fn run() {
 		let config = include_bytes!("../config.toml");
-		let config: super::Config = toml::from_slice(config).unwrap();
-		let _ = thread::spawn(|| async_main(config));
+		let mut config: super::Config = toml::from_slice(config).unwrap();
+		// we can not use unix socket here.
+		// Since the thread will not be shut down gracefull and the socket would remain.
+		if let Some(api) = config.api.as_mut() {
+			if api.listener.starts_with("unix://") {
+				api.listener = "localhost:8080".to_owned()
+			}
+		}
+		thread::spawn(|| async_main(config));
 		let duration = Duration::from_secs(6);
 		sleep(duration);
 		assert!(Command::new("kdig")

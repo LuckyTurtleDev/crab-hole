@@ -19,7 +19,7 @@ use async_trait::async_trait;
 use directories::ProjectDirs;
 use hickory_proto::{
 	op::{header::Header, response_code::ResponseCode},
-	rr::Name
+	rr::{rdata::{A, AAAA}, Name, RData, Record, RecordType}
 };
 use hickory_server::{
 	authority::{Catalog, MessageResponseBuilder},
@@ -41,6 +41,7 @@ use std::{
 	fs::{self, File},
 	io::BufReader,
 	iter,
+	net::{Ipv4Addr, Ipv6Addr},
 	path::{Path, PathBuf},
 	process::ExitCode,
 	sync::{
@@ -136,7 +137,8 @@ struct Handler {
 	catalog: Catalog,
 	blocklist: Arc<BlockList>,
 	include_subdomains: bool,
-	stats: Stats
+	stats: Stats,
+	blocking_mode: BlockingMode
 }
 
 impl Handler {
@@ -158,7 +160,8 @@ impl Handler {
 			catalog,
 			blocklist: Arc::new(blocklist),
 			include_subdomains: config.blocklist.include_subdomains,
-			stats
+			stats,
+			blocking_mode: config.blocklist.blocking_mode
 		}
 	}
 }
@@ -196,23 +199,59 @@ impl RequestHandler for Handler {
 			debug!("blocked: {lower_query:?}");
 			self.stats.blocked_request.fetch_add(1, Ordering::Relaxed);
 			let mut header = Header::response_from_request(request.header());
-			header.set_response_code(ResponseCode::NXDomain);
-			return response_handler
-				.send_response(
-					MessageResponseBuilder::from_message_request(request).build(
-						header,
-						iter::empty(),
-						iter::empty(),
-						iter::empty(),
-						iter::empty()
-					)
-				)
-				.await
-				.unwrap_or_else(|_| {
-					let mut header = Header::new();
-					header.set_response_code(ResponseCode::ServFail);
-					header.into()
-				});
+			match self.blocking_mode {
+				BlockingMode::NXDomain => {
+					header.set_response_code(ResponseCode::NXDomain);
+					return response_handler
+						.send_response(
+							MessageResponseBuilder::from_message_request(request).build(
+								header,
+								iter::empty(),
+								iter::empty(),
+								iter::empty(),
+								iter::empty()
+							)
+						)
+						.await
+						.unwrap_or_else(|_| {
+							let mut header = Header::new();
+							header.set_response_code(ResponseCode::ServFail);
+							header.into()
+						});
+				},
+				BlockingMode::Zero => {
+					header.set_response_code(ResponseCode::NoError);
+					let answers = match lower_query.query_type() {
+						RecordType::A => vec![Record::from_rdata(
+							lower_query.name().into(),
+							3600,
+							RData::A(A(Ipv4Addr::new(0, 0, 0, 0)))
+						)],
+						RecordType::AAAA => vec![Record::from_rdata(
+							lower_query.name().into(),
+							3600,
+							RData::AAAA(AAAA(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)))
+						)],
+						_ => vec![]
+					};
+					return response_handler
+						.send_response(
+							MessageResponseBuilder::from_message_request(request).build(
+								header,
+								answers.iter(),
+								iter::empty(),
+								iter::empty(),
+								iter::empty()
+							)
+						)
+						.await
+						.unwrap_or_else(|_| {
+							let mut header = Header::new();
+							header.set_response_code(ResponseCode::ServFail);
+							header.into()
+						});
+				}
+			}
 		}
 
 		debug!("{lower_query:?}");
@@ -487,7 +526,17 @@ struct BlockConfig {
 	lists: Vec<Url>,
 	include_subdomains: bool,
 	#[serde(default)]
-	allow_list: Vec<Url>
+	allow_list: Vec<Url>,
+	#[serde(default)]
+	blocking_mode: BlockingMode
+}
+
+#[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum BlockingMode {
+	#[default]
+	NXDomain,
+	Zero
 }
 
 #[derive(Debug, Deserialize)]

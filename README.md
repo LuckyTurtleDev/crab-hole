@@ -56,6 +56,7 @@ lists = [
 ]
 # allow domains blocked by the blocklist again
 allow_list = ["file:///allowed.txt"]
+blocking_mode = "nxdomain" # or use "zero" so client will get 0.0.0.0 or [::] as answer
 
 # optional
 [api]

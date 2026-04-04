@@ -42,6 +42,7 @@ use std::{
 	io::BufReader,
 	iter,
 	path::{Path, PathBuf},
+	process::ExitCode,
 	sync::{
 		atomic::{AtomicU64, Ordering},
 		Arc
@@ -53,8 +54,8 @@ use time::OffsetDateTime;
 use tokio::{
 	fs::{read_to_string, write},
 	net::{TcpListener, UdpSocket},
-	time::sleep,
-	try_join
+	select, signal,
+	time::sleep
 };
 use url::Url;
 
@@ -349,7 +350,7 @@ async fn get_file(
 }
 
 #[tokio::main]
-async fn async_main(config: Config) {
+async fn async_main(config: Config) -> anyhow::Result<()> {
 	let stats = Stats::default();
 	let handler = Handler::new(&config, stats.clone()).await;
 	let blocklist = handler.blocklist.clone();
@@ -450,20 +451,24 @@ async fn async_main(config: Config) {
 		}
 	});
 	info!("🚀 start dns server");
-	let res = try_join!(
-		async {
+
+	select! {
+		res = async {
 			server
 				.block_until_done()
 				.await
 				.with_context(|| "failed to start dns server")
-		},
-		async {
+		} => {res}
+		res = async {
 			api::init(config.api, stats, blocklist)
 				.await
 				.with_context(|| "failed to start api/web server")
-		}
-	);
-	res.unwrap();
+		}, if config.api.is_some() => {res} //on none init return directly
+		res = async {
+			signal::ctrl_c().await.context("failed to listen for signal")
+		} => {res}
+	}?;
+	Ok(())
 }
 
 #[derive(Debug, Deserialize)]
@@ -561,7 +566,7 @@ enum Commands {
 	ValidateLists
 }
 
-fn main() {
+fn main() -> ExitCode {
 	init_logger();
 	info!("🦀 {CARGO_PKG_NAME}  v{CARGO_PKG_VERSION} 🦀");
 	Lazy::force(&CONFIG_PATH);
@@ -592,17 +597,30 @@ fn main() {
 
 	match cli.command {
 		Some(command) => match command {
-			Commands::ValidateConfig => info!("Config is valid"),
+			Commands::ValidateConfig => {
+				info!("Config is valid");
+				ExitCode::SUCCESS
+			},
 			Commands::ValidateLists => {
 				if !async_validate_lists(config) {
 					error!("Config validation failed!");
-					std::process::exit(1);
+					ExitCode::FAILURE
 				} else {
 					info!("All lists are valid");
+					ExitCode::SUCCESS
 				}
 			},
 		},
-		None => async_main(config)
+		None => match async_main(config) {
+			Ok(_) => {
+				info!("🛑 stop dns server");
+				ExitCode::SUCCESS
+			},
+			Err(err) => {
+				error!("🛑 crab-hole produced an irrecoverable error:\n{err:?}");
+				ExitCode::FAILURE
+			}
+		}
 	}
 }
 
@@ -737,8 +755,15 @@ mod tests {
 	#[ignore]
 	fn run() {
 		let config = include_bytes!("../config.toml");
-		let config: super::Config = toml::from_slice(config).unwrap();
-		let _ = thread::spawn(|| async_main(config));
+		let mut config: super::Config = toml::from_slice(config).unwrap();
+		// we can not use unix socket here.
+		// Since the thread will not be shut down gracefull and the socket would remain.
+		if let Some(api) = config.api.as_mut() {
+			if api.listener.starts_with("unix://") {
+				api.listener = "localhost:8080".to_owned()
+			}
+		}
+		thread::spawn(|| async_main(config));
 		let duration = Duration::from_secs(6);
 		sleep(duration);
 		assert!(Command::new("kdig")

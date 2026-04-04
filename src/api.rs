@@ -2,7 +2,8 @@ use crate::{
 	blocklist::{BlockList, FailedList, ListType, QueryInfo},
 	CARGO_PKG_NAME, CARGO_PKG_VERSION
 };
-use log::info;
+use anyhow::Context;
+use log::{error, info};
 use poem::{http::StatusCode, listener::TcpListener, Route, Server};
 use poem_openapi::{
 	auth::ApiKey,
@@ -14,6 +15,7 @@ use poem_openapi::{
 use serde::Deserialize;
 use std::{
 	collections::HashMap,
+	path::{Path, PathBuf},
 	sync::{atomic::Ordering, Arc}
 };
 use time::OffsetDateTime;
@@ -21,11 +23,10 @@ use time::OffsetDateTime;
 #[derive(Debug, Deserialize, Object)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Config {
-	port: u16,
-	listen: String,
+	pub listener: String,
 	#[serde(default)]
-	show_doc: bool,
-	admin_key: Option<String>
+	pub show_doc: bool,
+	pub admin_key: Option<String>
 }
 
 #[derive(Debug, Object)]
@@ -196,7 +197,6 @@ pub(crate) async fn init(
 	blocklist: Arc<BlockList>
 ) -> anyhow::Result<()> {
 	if let Some(config) = config {
-		let address = format!("{}:{}", config.listen, config.port);
 		let api_data = Api {
 			blocklist,
 			doc_enable: config.show_doc,
@@ -205,7 +205,7 @@ pub(crate) async fn init(
 		};
 		let api_service =
 			OpenApiService::new(api_data, CARGO_PKG_NAME, CARGO_PKG_VERSION)
-				.server(&address);
+				.server(&config.listener);
 		let doc = if config.show_doc {
 			Some(api_service.redoc())
 		} else {
@@ -217,8 +217,48 @@ pub(crate) async fn init(
 		} else {
 			server
 		};
-		info!("start api/web server at {address:?}");
-		Server::new(TcpListener::bind(address)).run(server).await?;
+		info!("start api/web server at {:?}", config.listener);
+		if let Some(listener) = config.listener.strip_prefix("unix://") {
+			#[cfg(not(unix))]
+			{
+				anyhow::bail!("unix sockets is only supported on unix systems");
+			}
+			#[cfg(unix)]
+			{
+				use poem::listener::UnixListener;
+				use std::fs::remove_file;
+
+				/// Delete the given file on drop
+				struct FileDeleter(PathBuf);
+				impl Drop for FileDeleter {
+					fn drop(&mut self) {
+						info!("delete socket: {:?}", self.0);
+						if let Err(err) = remove_file(&self.0).with_context(|| {
+							format!("failed to remove file {:?}", self.0)
+						}) {
+							error!("{err:?}");
+						}
+					}
+				}
+
+				let path = Path::new(listener);
+				// If the socket doesn't exist yet, we want to delete it after exiting the program.
+				// If it already existed, it was probally created by a service like systemd, so we want to keep it.
+				let delete_file = if path.exists() {
+					None
+				} else {
+					Some(FileDeleter(path.to_owned()))
+				};
+				Server::new(UnixListener::bind(listener))
+					.run(server)
+					.await?;
+				drop(delete_file);
+			}
+		} else {
+			Server::new(TcpListener::bind(config.listener))
+				.run(server)
+				.await?;
+		}
 	}
 	Ok(())
 }

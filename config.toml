@@ -3,13 +3,13 @@ include_subdomains = true
 lists = [
 	"https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts",
 	"https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt",
-	"file:///blocked.txt"
+	#"file:///blocked.txt"
 ]
 
 # optional
 [api]
-port = 8080
-listen = "127.0.0.1"
+listener = "localhost:8080"
+#listener = "unix:///tmp/crab-hole.sock"
 # optional (default = false)
 show_doc = true # OpenAPI doc loads content from third party websites
 # optional

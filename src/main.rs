@@ -19,7 +19,10 @@ use async_trait::async_trait;
 use directories::ProjectDirs;
 use hickory_proto::{
 	op::{header::Header, response_code::ResponseCode},
-	rr::{rdata::{A, AAAA}, Name, RData, Record, RecordType}
+	rr::{
+		rdata::{A, AAAA},
+		Name, RData, Record, RecordType
+	}
 };
 use hickory_server::{
 	authority::{Catalog, MessageResponseBuilder},

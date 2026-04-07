@@ -1,0 +1,388 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "crab-hole",
+        "version": "0.1.9"
+    },
+    "servers": [
+        {
+            "url": "localhost:8080"
+        }
+    ],
+    "tags": [],
+    "paths": {
+        "/info.json": {
+            "get": {
+                "summary": "provide basic info about the running server",
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json; charset=utf-8": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Info"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/stats.json": {
+            "get": {
+                "summary": "basic statistics",
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json; charset=utf-8": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PubStats"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/query.json": {
+            "get": {
+                "summary": "query a domain, to test if it is blocked.\nReturn all blocklists that contain this domain.",
+                "parameters": [
+                    {
+                        "name": "domain",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "required": true,
+                        "deprecated": false,
+                        "explode": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json; charset=utf-8": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "$ref": "#/components/schemas/QueryInfo"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Key": []
+                    }
+                ]
+            }
+        },
+        "/lists.json": {
+            "get": {
+                "summary": "Return all blocklists.",
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json; charset=utf-8": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/List"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Key": []
+                    }
+                ]
+            }
+        },
+        "/all_stats.json": {
+            "get": {
+                "summary": "private statistics",
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json; charset=utf-8": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Stats"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Key": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "FailedList": {
+                "type": "object",
+                "required": [
+                    "url",
+                    "type",
+                    "error"
+                ],
+                "properties": {
+                    "url": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "$ref": "#/components/schemas/ListType"
+                    },
+                    "error": {
+                        "type": "string",
+                        "description": "reason why loading list failed"
+                    }
+                }
+            },
+            "Info": {
+                "type": "object",
+                "required": [
+                    "crate",
+                    "version"
+                ],
+                "properties": {
+                    "crate": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                },
+                "example": {
+                    "crate": "crab-hole",
+                    "version": "0.1.9"
+                }
+            },
+            "List": {
+                "type": "object",
+                "anyOf": [
+                    {
+                        "$ref": "#/components/schemas/List_OkList"
+                    },
+                    {
+                        "$ref": "#/components/schemas/List_UpdateFailedList"
+                    },
+                    {
+                        "$ref": "#/components/schemas/List_FailedList"
+                    }
+                ],
+                "discriminator": {
+                    "propertyName": "state",
+                    "mapping": {
+                        "ok": "#/components/schemas/List_OkList",
+                        "updatefailed": "#/components/schemas/List_UpdateFailedList",
+                        "error": "#/components/schemas/List_FailedList"
+                    }
+                }
+            },
+            "ListType": {
+                "type": "string",
+                "enum": [
+                    "block",
+                    "allow"
+                ]
+            },
+            "List_FailedList": {
+                "allOf": [
+                    {
+                        "type": "object",
+                        "required": [
+                            "state"
+                        ],
+                        "properties": {
+                            "state": {
+                                "type": "string",
+                                "example": "error"
+                            }
+                        }
+                    },
+                    {
+                        "$ref": "#/components/schemas/FailedList"
+                    }
+                ]
+            },
+            "List_OkList": {
+                "allOf": [
+                    {
+                        "type": "object",
+                        "required": [
+                            "state"
+                        ],
+                        "properties": {
+                            "state": {
+                                "type": "string",
+                                "example": "ok"
+                            }
+                        }
+                    },
+                    {
+                        "$ref": "#/components/schemas/OkList"
+                    }
+                ]
+            },
+            "List_UpdateFailedList": {
+                "allOf": [
+                    {
+                        "type": "object",
+                        "required": [
+                            "state"
+                        ],
+                        "properties": {
+                            "state": {
+                                "type": "string",
+                                "example": "updatefailed"
+                            }
+                        }
+                    },
+                    {
+                        "$ref": "#/components/schemas/UpdateFailedList"
+                    }
+                ]
+            },
+            "OkList": {
+                "type": "object",
+                "required": [
+                    "len",
+                    "url",
+                    "type"
+                ],
+                "properties": {
+                    "len": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "count of domains inside this List"
+                    },
+                    "url": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "$ref": "#/components/schemas/ListType"
+                    }
+                }
+            },
+            "PubStats": {
+                "type": "object",
+                "required": [
+                    "blocked_ratio",
+                    "blocklist_len",
+                    "running_since"
+                ],
+                "properties": {
+                    "blocked_ratio": {
+                        "type": "number",
+                        "format": "float"
+                    },
+                    "blocklist_len": {
+                        "type": "integer",
+                        "format": "uint64"
+                    },
+                    "running_since": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "QueryInfo": {
+                "type": "object",
+                "required": [
+                    "lists",
+                    "allowed"
+                ],
+                "properties": {
+                    "lists": {
+                        "type": "array",
+                        "description": "url of the blocklists, which blocks the domain",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "allowed": {
+                        "type": "boolean",
+                        "description": "indicate if the access to the matched domain is blocked\nor was allowed by a allowlist"
+                    }
+                }
+            },
+            "Stats": {
+                "type": "object",
+                "required": [
+                    "total_request",
+                    "blocked_request",
+                    "blocklist_len",
+                    "running_since"
+                ],
+                "properties": {
+                    "total_request": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "total dns request since start"
+                    },
+                    "blocked_request": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "blocked dns request since start"
+                    },
+                    "blocklist_len": {
+                        "type": "integer",
+                        "format": "uint64"
+                    },
+                    "running_since": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "UpdateFailedList": {
+                "type": "object",
+                "description": "updating the list has failed.\nBut an old cached version can still be used",
+                "required": [
+                    "len",
+                    "url",
+                    "type",
+                    "error"
+                ],
+                "properties": {
+                    "len": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "count of domains inside this List"
+                    },
+                    "url": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "$ref": "#/components/schemas/ListType"
+                    },
+                    "error": {
+                        "type": "string",
+                        "description": "reason why updating list failed"
+                    }
+                }
+            }
+        },
+        "securitySchemes": {
+            "Key": {
+                "type": "apiKey",
+                "name": "key",
+                "in": "query"
+            }
+        }
+    }
+}

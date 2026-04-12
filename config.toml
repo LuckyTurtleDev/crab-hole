@@ -28,7 +28,7 @@ port = 8053
 # optional
 [upstream.options]
 # optional (default = false)
-# validate = true # use DNSSEC
+validate = true # use DNSSEC
 
 [[upstream.name_servers]]
 socket_addr = "[2606:4700:4700::1111]:853"

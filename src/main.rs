@@ -20,11 +20,16 @@ use directories::ProjectDirs;
 use hickory_proto::{
 	op::{Header, Metadata, ResponseCode},
 	rr::{
-		Name, RData, Record, RecordType, rdata::{A, AAAA}
+		rdata::{A, AAAA},
+		Name, RData, Record, RecordType
 	}
 };
 use hickory_server::{
-	Server, net::runtime::Time, server::{Request, RequestHandler, ResponseHandler, ResponseInfo}, store::forwarder::{ForwardConfig, ForwardZoneHandler}, zone_handler::{Catalog, MessageResponseBuilder}
+	net::runtime::Time,
+	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
+	store::forwarder::{ForwardConfig, ForwardZoneHandler},
+	zone_handler::{Catalog, MessageResponseBuilder},
+	Server
 };
 use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
@@ -166,12 +171,11 @@ impl Handler {
 }
 
 /// create a  response header from request [Metadata], which sholud be returened if `.send_reponse()` failed
-fn server_failure_header(metadata: &Metadata) -> Header
-{
-	let mut header = Header{
-						metadata: Metadata::response_from_request(metadata),
-						counts: Default::default(),
-					};
+fn server_failure_header(metadata: &Metadata) -> Header {
+	let mut header = Header {
+		metadata: Metadata::response_from_request(metadata),
+		counts: Default::default()
+	};
 	header.metadata.response_code = ResponseCode::ServFail;
 	header
 }
@@ -181,7 +185,7 @@ impl RequestHandler for Handler {
 	async fn handle_request<R: ResponseHandler, T: Time>(
 		&self,
 		request: &Request,
-		mut response_handler: R,
+		mut response_handler: R
 	) -> ResponseInfo {
 		let Ok(lower_query) = request.request_info().map(|v| v.query) else {
 			warn!("Multiple questions in one dns query is currently unsupported");
@@ -191,9 +195,7 @@ impl RequestHandler for Handler {
 						.error_msg(&request.metadata, ResponseCode::ServFail)
 				)
 				.await
-				.unwrap_or_else(|_| {
-					server_failure_header(&request.metadata).into()
-				});
+				.unwrap_or_else(|_| server_failure_header(&request.metadata).into());
 		};
 		self.stats.total_request.fetch_add(1, Ordering::Relaxed);
 		if self
@@ -259,7 +261,9 @@ impl RequestHandler for Handler {
 		}
 
 		debug!("{lower_query:?}");
-		self.catalog.handle_request::<R, T>(request, response_handler).await
+		self.catalog
+			.handle_request::<R, T>(request, response_handler)
+			.await
 	}
 }
 
@@ -586,7 +590,7 @@ struct QuicConfig {
 	certificate: PathBuf,
 	key: PathBuf,
 	#[serde(default = "default_timeout")]
-	timeout_ms: u64,
+	timeout_ms: u64
 }
 
 #[derive(Debug, Deserialize)]

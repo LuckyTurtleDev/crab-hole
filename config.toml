@@ -8,7 +8,7 @@ lists = [
 
 # optional
 [api]
-listener = "localhost:8080"
+listener = "127.0.0.1:8080"
 #listener = "unix:///tmp/crab-hole.sock"
 # optional (default = false)
 show_doc = true # OpenAPI doc loads content from third party websites

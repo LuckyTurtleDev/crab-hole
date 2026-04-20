@@ -170,7 +170,7 @@ impl Handler {
 	}
 }
 
-/// create a  response header from request [Metadata], which sholud be returened if `.send_reponse()` failed
+/// Create a response header from request [Metadata], which should be returned if `.send_response()` failed
 fn server_failure_header(metadata: &Metadata) -> Header {
 	let mut header = Header {
 		metadata: Metadata::response_from_request(metadata),

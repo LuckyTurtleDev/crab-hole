@@ -11,6 +11,7 @@ extern crate test;
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 mod api;
+mod config;
 mod logger;
 mod parser;
 
@@ -27,7 +28,7 @@ use hickory_proto::{
 use hickory_server::{
 	net::runtime::Time,
 	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
-	store::forwarder::{ForwardConfig, ForwardZoneHandler},
+	store::forwarder::ForwardZoneHandler,
 	zone_handler::{Catalog, MessageResponseBuilder},
 	Server
 };
@@ -148,7 +149,7 @@ struct Handler {
 impl Handler {
 	async fn new(config: &Config, stats: Stats) -> Self {
 		let zone_name = Name::root();
-		let authority = ForwardZoneHandler::builder_tokio(config.upstream.clone())
+		let authority = ForwardZoneHandler::builder_tokio(config.upstream.clone().into())
 			.build()
 			.expect("Failed to create forwarder");
 
@@ -520,7 +521,7 @@ async fn async_main(config: Config) -> anyhow::Result<()> {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Config {
-	upstream: ForwardConfig,
+	upstream: config::OurForwardConfig,
 	downstream: Vec<DownstreamConfig>,
 	#[serde(default)]
 	blocklist: BlockConfig,

@@ -29,6 +29,7 @@ impl From<OurForwardConfig> for ForwardConfig {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum UpstreamServer {
 	Udp(UpstreamCommon),
 	Tcp(UpstreamCommon),
@@ -41,12 +42,23 @@ pub enum UpstreamServer {
 /// settings which have every protocoll.
 /// I would to like serde `flatten` here, but it is not compatible with serde `deny_unknown_fields`.
 /// It is also used for TCP and UDP since they have no addiotional configuration.
-
 #[derive(Deserialize, Debug, Clone)]
 pub struct UpstreamCommon {
+	/// Whether to trust `NXDOMAIN` responses from upstream nameservers.
+    ///
+    /// When this is `true`, and an empty `NXDOMAIN` response with an empty answers set is
+    /// received, the query will not be retried against other configured name servers.
+    ///
+    /// (On a response with any other error response code, the query will still be retried
+    /// regardless of this configuration setting.)
+    ///
+    /// Defaults to `true`.
 	pub trust_negative_responses: bool,
+	/// The address which the DNS NameServer is registered at.
 	pub ip: IpAddr,
+	/// The remote port to connect to
 	pub port: Option<u16>,
+	/// The client address (IP and port) to use for connecting to the server
 	pub bind_addr: Option<SocketAddr>
 }
 

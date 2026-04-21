@@ -103,7 +103,6 @@ listen = "127.0.0.1"
 port = 8055
 certificate = "dns.example.com.crt"
 key = "dns.example.com.key"
-dns_hostname = "dns.example.com"
 # optional (default = 3000)
 timeout_ms = 3000
 
@@ -124,7 +123,8 @@ validate = true # use DNSSEC
 # see https://docs.rs/hickory-resolver/0.25.2/hickory_resolver/config/struct.ResolverOpts.html for all options
 
 [[upstream.name_servers]]
-socket_addr = "[2606:4700:4700::1111]:853"
+socket_addr = "[2606:4700:4700::1111]"
+port = 853
 protocol = "tls"
 tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_negative_responses = false

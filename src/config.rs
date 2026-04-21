@@ -29,7 +29,7 @@ impl From<OurForwardConfig> for ForwardConfig {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "protocol", rename_all = "snake_case")]
 pub enum UpstreamServer {
 	Udp(UpstreamCommon),
 	Tcp(UpstreamCommon),

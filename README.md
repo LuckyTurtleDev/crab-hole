@@ -120,31 +120,33 @@ timeout_ms = 3000
 [upstream.options]
 # optional (default = false)
 validate = true # use DNSSEC
-# see https://docs.rs/hickory-resolver/0.25.2/hickory_resolver/config/struct.ResolverOpts.html for all options
+# see https://docs.rs/hickory-resolver/0.26.0/hickory_resolver/config/struct.ResolverOpts.html for all options
 
 [[upstream.name_servers]]
-socket_addr = "[2606:4700:4700::1111]"
+ip = "2606:4700:4700::1111"
 port = 853
 protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
+trust_negative_responses = false
+# see https://docs.rs/hickory-resolver/0.26.0/hickory_resolver/config/struct.ResolverOpts.html for all options
+
+
+[[upstream.name_servers]]
+ip = "2606:4700:4700::1001"
+protocol = "tls"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_negative_responses = false
 
 [[upstream.name_servers]]
-socket_addr = "[2606:4700:4700::1001]:853"
+ip = "1.1.1.1"
 protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_negative_responses = false
 
 [[upstream.name_servers]]
-socket_addr = "1.1.1.1:853"
+ip = "1.0.0.1"
 protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
-trust_negative_responses = false
-
-[[upstream.name_servers]]
-socket_addr = "1.0.0.1:853"
-protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_negative_responses = false
 ```
 

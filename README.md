@@ -45,6 +45,7 @@ services:
 
 # Configuration:
 Example config file using cloudflare as dot (dns-over-tls) upstream.
+For the all settings see [here](https://docs.rs/crab-hole/0.3.0/crab_hole/struct.Config.html).
 <!-- test_config -->
 ```toml
 [blocklist]
@@ -128,7 +129,7 @@ port = 853
 protocol = "tls"
 server_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_negative_responses = false
-# see https://docs.rs/hickory-resolver/0.26.0/hickory_resolver/config/struct.ResolverOpts.html for all options
+# see https://docs.rs/crab-hole/0.3.0/crab_hole/config/enum.UpstreamServer.html for all options
 
 
 [[upstream.name_servers]]

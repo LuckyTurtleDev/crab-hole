@@ -42,6 +42,7 @@ pub enum UpstreamServer {
 /// settings which have every protocoll.
 /// I would to like serde `flatten` here, but it is not compatible with serde `deny_unknown_fields`.
 /// It is also used for TCP and UDP since they have no addiotional configuration.
+// All descriptions stolen from hickory.
 #[derive(Deserialize, Debug, Clone)]
 pub struct UpstreamCommon {
 	/// Whether to trust `NXDOMAIN` responses from upstream nameservers.

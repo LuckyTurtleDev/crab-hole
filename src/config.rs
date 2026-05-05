@@ -154,7 +154,7 @@ impl From<UpstreamServer> for NameServerConfig {
 		let mut connection = ConnectionConfig::new(val.into());
 		connection.bind_addr = common.bind_addr;
 		if let Some(port) = common.port {
-			// if not set this is the protocoll default port
+			// if not set this is the protocol's default port
 			connection.port = port;
 		}
 		NameServerConfig::new(common.ip, common.trust_negative_responses, vec![])

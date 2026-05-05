@@ -39,7 +39,7 @@ pub enum UpstreamServer {
 	H3(UpstreamH3)
 }
 
-/// settings which have every protocoll.
+/// Settings which every protocol has.
 /// I would to like serde `flatten` here, but it is not compatible with serde `deny_unknown_fields`.
 /// It is also used for TCP and UDP since they have no addiotional configuration.
 // All descriptions stolen from hickory.

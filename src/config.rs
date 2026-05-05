@@ -40,8 +40,8 @@ pub enum UpstreamServer {
 }
 
 /// Settings which every protocol has.
-/// I would to like serde `flatten` here, but it is not compatible with serde `deny_unknown_fields`.
-/// It is also used for TCP and UDP since they have no additional configuration.
+// I would to like serde `flatten` here, but it is not compatible with serde `deny_unknown_fields`.
+// It is also used for TCP and UDP since they have no additional configuration.
 // All descriptions are stolen from hickory.
 #[derive(Deserialize, Debug, Clone)]
 pub struct UpstreamCommon {

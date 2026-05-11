@@ -40,7 +40,6 @@ use rustls::{
 	server::ResolvesServerCert,
 	sign::{CertifiedKey, SingleCertAndKey}
 };
-use serde::Deserialize;
 use std::{
 	env::var,
 	fs::{self, File},
@@ -119,7 +118,10 @@ mod trie;
 mod blocklist;
 use blocklist::BlockList;
 
-use crate::logger::init_logger;
+use crate::{
+	config::{BlockingMode, Config, DownstreamConfig},
+	logger::init_logger
+};
 
 #[derive(Debug, Clone)]
 struct Stats {
@@ -516,108 +518,6 @@ async fn async_main(config: Config) -> anyhow::Result<()> {
 		} => {res}
 	}?;
 	Ok(())
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Config {
-	upstream: config::OurForwardConfig,
-	downstream: Vec<DownstreamConfig>,
-	#[serde(default)]
-	blocklist: BlockConfig,
-	api: Option<api::Config>
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct BlockConfig {
-	lists: Vec<Url>,
-	include_subdomains: bool,
-	#[serde(default)]
-	allow_list: Vec<Url>,
-	#[serde(default)]
-	blocking_mode: BlockingMode
-}
-
-#[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq)]
-#[serde(rename_all = "lowercase")]
-enum BlockingMode {
-	#[default]
-	NXDomain,
-	Zero
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "lowercase", tag = "protocol")]
-enum DownstreamConfig {
-	Udp(UdpConfig),
-	Tls(TlsConfig),
-	Https(HttpsConfig),
-	H3(Https3Config),
-	Quic(QuicConfig)
-}
-
-fn default_timeout() -> u64 {
-	3000
-}
-
-fn default_http_endpoint() -> String {
-	"/dns-query".into()
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct UdpConfig {
-	port: u16,
-	listen: String
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct TlsConfig {
-	port: u16,
-	listen: String,
-	certificate: PathBuf,
-	key: PathBuf,
-	#[serde(default = "default_timeout")]
-	timeout_ms: u64
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct QuicConfig {
-	port: u16,
-	listen: String,
-	certificate: PathBuf,
-	key: PathBuf,
-	#[serde(default = "default_timeout")]
-	timeout_ms: u64
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Https3Config {
-	port: u16,
-	listen: String,
-	certificate: PathBuf,
-	key: PathBuf,
-	#[serde(default = "default_timeout")]
-	timeout_ms: u64,
-	dns_hostname: Option<String>
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct HttpsConfig {
-	port: u16,
-	listen: String,
-	certificate: PathBuf,
-	key: PathBuf,
-	#[serde(default = "default_timeout")]
-	timeout_ms: u64,
-	dns_hostname: Option<String>,
-	#[serde(default = "default_http_endpoint")]
-	http_endpoint: String
 }
 
 #[derive(Parser)]

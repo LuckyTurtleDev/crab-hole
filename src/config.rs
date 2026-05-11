@@ -1,5 +1,6 @@
 use std::{
 	net::{IpAddr, SocketAddr},
+	path::PathBuf,
 	sync::Arc
 };
 
@@ -8,6 +9,113 @@ use hickory_resolver::config::{
 };
 use hickory_server::store::forwarder::ForwardConfig;
 use serde::Deserialize;
+use url::Url;
+
+// downstream configs
+
+fn default_timeout() -> u64 {
+	3000
+}
+
+fn default_http_endpoint() -> String {
+	"/dns-query".into()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UdpConfig {
+	pub port: u16,
+	pub listen: String
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TlsConfig {
+	pub port: u16,
+	pub listen: String,
+	pub certificate: PathBuf,
+	pub key: PathBuf,
+	#[serde(default = "default_timeout")]
+	pub timeout_ms: u64
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QuicConfig {
+	pub port: u16,
+	pub listen: String,
+	pub certificate: PathBuf,
+	pub key: PathBuf,
+	#[serde(default = "default_timeout")]
+	pub timeout_ms: u64
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Https3Config {
+	pub port: u16,
+	pub listen: String,
+	pub certificate: PathBuf,
+	pub key: PathBuf,
+	#[serde(default = "default_timeout")]
+	pub timeout_ms: u64,
+	pub dns_hostname: Option<String>
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HttpsConfig {
+	pub port: u16,
+	pub listen: String,
+	pub certificate: PathBuf,
+	pub key: PathBuf,
+	#[serde(default = "default_timeout")]
+	pub timeout_ms: u64,
+	pub dns_hostname: Option<String>,
+	#[serde(default = "default_http_endpoint")]
+	pub http_endpoint: String
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Config {
+	pub upstream: OurForwardConfig,
+	pub downstream: Vec<DownstreamConfig>,
+	#[serde(default)]
+	pub blocklist: BlockConfig,
+	pub api: Option<crate::api::Config>
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockConfig {
+	pub lists: Vec<Url>,
+	pub include_subdomains: bool,
+	#[serde(default)]
+	pub allow_list: Vec<Url>,
+	#[serde(default)]
+	pub blocking_mode: BlockingMode
+}
+
+#[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum BlockingMode {
+	#[default]
+	NXDomain,
+	Zero
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "lowercase", tag = "protocol")]
+pub enum DownstreamConfig {
+	Udp(UdpConfig),
+	Tls(TlsConfig),
+	Https(HttpsConfig),
+	H3(Https3Config),
+	Quic(QuicConfig)
+}
+
+// ForwardingConfig
 
 /// Configuration for forwarder zones
 #[derive(Clone, Deserialize, Debug, Default)]

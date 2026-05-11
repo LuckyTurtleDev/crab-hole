@@ -11,6 +11,7 @@ extern crate test;
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 mod api;
+mod config;
 mod logger;
 mod parser;
 
@@ -18,17 +19,18 @@ use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use directories::ProjectDirs;
 use hickory_proto::{
-	op::{header::Header, response_code::ResponseCode},
+	op::{Header, Metadata, ResponseCode},
 	rr::{
 		rdata::{A, AAAA},
 		Name, RData, Record, RecordType
 	}
 };
 use hickory_server::{
-	authority::{Catalog, MessageResponseBuilder},
+	net::runtime::Time,
 	server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
-	store::forwarder::{ForwardAuthority, ForwardConfig},
-	ServerFuture as Server
+	store::forwarder::ForwardZoneHandler,
+	zone_handler::{Catalog, MessageResponseBuilder},
+	Server
 };
 use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
@@ -147,7 +149,7 @@ struct Handler {
 impl Handler {
 	async fn new(config: &Config, stats: Stats) -> Self {
 		let zone_name = Name::root();
-		let authority = ForwardAuthority::builder_tokio(config.upstream.clone())
+		let authority = ForwardZoneHandler::builder_tokio(config.upstream.clone().into())
 			.build()
 			.expect("Failed to create forwarder");
 
@@ -169,9 +171,19 @@ impl Handler {
 	}
 }
 
+/// Create a response header from request [Metadata], which should be returned if `.send_response()` failed
+fn server_failure_header(metadata: &Metadata) -> Header {
+	let mut header = Header {
+		metadata: Metadata::response_from_request(metadata),
+		counts: Default::default()
+	};
+	header.metadata.response_code = ResponseCode::ServFail;
+	header
+}
+
 #[async_trait]
 impl RequestHandler for Handler {
-	async fn handle_request<R: ResponseHandler>(
+	async fn handle_request<R: ResponseHandler, T: Time>(
 		&self,
 		request: &Request,
 		mut response_handler: R
@@ -181,14 +193,10 @@ impl RequestHandler for Handler {
 			return response_handler
 				.send_response(
 					MessageResponseBuilder::from_message_request(request)
-						.error_msg(request.header(), ResponseCode::ServFail)
+						.error_msg(&request.metadata, ResponseCode::ServFail)
 				)
 				.await
-				.unwrap_or_else(|_| {
-					let mut header = Header::new();
-					header.set_response_code(ResponseCode::ServFail);
-					header.into()
-				});
+				.unwrap_or_else(|_| server_failure_header(&request.metadata).into());
 		};
 		self.stats.total_request.fetch_add(1, Ordering::Relaxed);
 		if self
@@ -201,14 +209,14 @@ impl RequestHandler for Handler {
 		{
 			debug!("blocked: {lower_query:?}");
 			self.stats.blocked_request.fetch_add(1, Ordering::Relaxed);
-			let mut header = Header::response_from_request(request.header());
+			let mut metadata = Metadata::response_from_request(&request.metadata);
 			match self.blocking_mode {
 				BlockingMode::NXDomain => {
-					header.set_response_code(ResponseCode::NXDomain);
+					metadata.response_code = ResponseCode::NXDomain;
 					return response_handler
 						.send_response(
 							MessageResponseBuilder::from_message_request(request).build(
-								header,
+								metadata,
 								iter::empty(),
 								iter::empty(),
 								iter::empty(),
@@ -217,13 +225,11 @@ impl RequestHandler for Handler {
 						)
 						.await
 						.unwrap_or_else(|_| {
-							let mut header = Header::new();
-							header.set_response_code(ResponseCode::ServFail);
-							header.into()
+							server_failure_header(&request.metadata).into()
 						});
 				},
 				BlockingMode::Zero => {
-					header.set_response_code(ResponseCode::NoError);
+					metadata.response_code = ResponseCode::NoError;
 					let answers = match lower_query.query_type() {
 						RecordType::A => vec![Record::from_rdata(
 							lower_query.name().into(),
@@ -240,7 +246,7 @@ impl RequestHandler for Handler {
 					return response_handler
 						.send_response(
 							MessageResponseBuilder::from_message_request(request).build(
-								header,
+								metadata,
 								answers.iter(),
 								iter::empty(),
 								iter::empty(),
@@ -249,16 +255,16 @@ impl RequestHandler for Handler {
 						)
 						.await
 						.unwrap_or_else(|_| {
-							let mut header = Header::new();
-							header.set_response_code(ResponseCode::ServFail);
-							header.into()
+							server_failure_header(&request.metadata).into()
 						});
 				}
 			}
 		}
 
 		debug!("{lower_query:?}");
-		self.catalog.handle_request(request, response_handler).await
+		self.catalog
+			.handle_request::<R, T>(request, response_handler)
+			.await
 	}
 }
 
@@ -475,8 +481,7 @@ async fn async_main(config: Config) -> anyhow::Result<()> {
 					.register_quic_listener(
 						udp_socket,
 						Duration::from_millis(downstream.timeout_ms),
-						cert_and_key,
-						downstream.dns_hostname
+						cert_and_key
 					)
 					.expect("failed to register quic downstream");
 			}
@@ -516,7 +521,7 @@ async fn async_main(config: Config) -> anyhow::Result<()> {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Config {
-	upstream: ForwardConfig,
+	upstream: config::OurForwardConfig,
 	downstream: Vec<DownstreamConfig>,
 	#[serde(default)]
 	blocklist: BlockConfig,
@@ -548,7 +553,7 @@ enum DownstreamConfig {
 	Udp(UdpConfig),
 	Tls(TlsConfig),
 	Https(HttpsConfig),
-	H3(QuicConfig),
+	H3(Https3Config),
 	Quic(QuicConfig)
 }
 
@@ -581,6 +586,17 @@ struct TlsConfig {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct QuicConfig {
+	port: u16,
+	listen: String,
+	certificate: PathBuf,
+	key: PathBuf,
+	#[serde(default = "default_timeout")]
+	timeout_ms: u64
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Https3Config {
 	port: u16,
 	listen: String,
 	certificate: PathBuf,

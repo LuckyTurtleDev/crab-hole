@@ -7,10 +7,13 @@ lists = [
 ]
 # allow domains blocked by the blocklist again
 allow_list = ["file:///allowed.txt"]
+blocking_mode = "nxdomain" # or use "zero" so client will get 0.0.0.0 or [::] as answer
 
 # optional
 [api]
 listener = "127.0.0.1:8080"
+# to use unix sockets, start listener with `unix://` 
+#listener = "unix:///tmp/crab-hole.sock"
 # optional (default = false)
 show_doc = true # OpenAPI doc loads content from third party websites
 # optional
@@ -51,7 +54,6 @@ listen = "127.0.0.1"
 port = 8055
 certificate = "dns.example.com.crt"
 key = "dns.example.com.key"
-dns_hostname = "dns.example.com"
 # optional (default = 3000)
 timeout_ms = 3000
 
@@ -68,30 +70,32 @@ timeout_ms = 3000
 # optional
 [upstream.options]
 # optional (default = false)
-# Keep DNSSEC disabled due to Hickory DNS issue, see https://github.com/hickory-dns/hickory-dns/issues/2429
-# validate = true # use DNSSEC
-# see https://docs.rs/hickory-resolver/0.24/hickory_resolver/config/struct.ResolverOpts.html for all options
+validate = true # use DNSSEC
+# see https://docs.rs/hickory-resolver/0.26.0/hickory_resolver/config/struct.ResolverOpts.html for all options
 
 [[upstream.name_servers]]
-socket_addr = "[2606:4700:4700::1111]:853"
+ip = "2606:4700:4700::1111"
+port = 853
 protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
+trust_negative_responses = false
+# see https://docs.rs/hickory-resolver/0.26.0/hickory_resolver/config/struct.ResolverOpts.html for all options
+
+
+[[upstream.name_servers]]
+ip = "2606:4700:4700::1001"
+protocol = "tls"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_negative_responses = false
 
 [[upstream.name_servers]]
-socket_addr = "[2606:4700:4700::1001]:853"
+ip = "1.1.1.1"
 protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_negative_responses = false
 
 [[upstream.name_servers]]
-socket_addr = "1.1.1.1:853"
+ip = "1.0.0.1"
 protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
-trust_negative_responses = false
-
-[[upstream.name_servers]]
-socket_addr = "1.0.0.1:853"
-protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
 trust_negative_responses = false

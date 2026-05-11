@@ -30,11 +30,11 @@ bit-vec = "0.8.0"
 chumsky = "0.12"
 clap = { version = "4.5.49", features = ["derive"] }
 directories = "6.0.0"
-hickory-proto = { version = "0.25.2", default-features = false }
-hickory-server = { version = "0.25.2", default-features = false, features = ["resolver"] }
-hickory-resolver = { version = "0.25.2", default-features = false }
+hickory-proto = { version = "0.26.1", default-features = false }
+hickory-server = { version = "0.26.1", default-features = false, features = ["resolver"] }
+hickory-resolver = { version = "0.26.1", default-features = false }
 log = "0.4.28"
-my-env-logger-style = { version = "0.2.0", features = ["custom-arg-formatter"] }
+my-env-logger-style = { version = "0.2.1", features = ["custom-arg-formatter"] }
 num-format = "0.4.4"
 once_cell = { version = "1.21.3", features = ["parking_lot"] }
 poem = "3.1.12"

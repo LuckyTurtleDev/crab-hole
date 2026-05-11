@@ -22,7 +22,7 @@ port = 8080
 
 [[downstream]]
 protocol = "udp"
-listen = "[::]" #all ipv6 and ipv4 adress
+listen = "[::]"  #all ipv6 and ipv4 adress
 port = 8053
 
 # optional
@@ -30,26 +30,29 @@ port = 8053
 # optional (default = false)
 validate = true # use DNSSEC
 
-[[upstream.name_servers]]
-socket_addr = "[2606:4700:4700::1111]:853"
-protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
-trust_negative_responses = false
 
 [[upstream.name_servers]]
-socket_addr = "[2606:4700:4700::1001]:853"
-protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
+ip = "2606:4700:4700::1111"
 trust_negative_responses = false
+# optional (default = protocol default)
+port = 853
+protocol = "tls"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
 
 [[upstream.name_servers]]
-socket_addr = "1.1.1.1:853"
-protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
+ip = "2606:4700:4700::1001"
 trust_negative_responses = false
+protocol = "tls"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
 
 [[upstream.name_servers]]
-socket_addr = "1.0.0.1:853"
-protocol = "tls"
-tls_dns_name = "1dot1dot1dot1.cloudflare-dns.com"
+ip = "1.1.1.1"
 trust_negative_responses = false
+protocol = "tls"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"
+
+[[upstream.name_servers]]
+ip = "1.0.0.1"
+trust_negative_responses = false
+protocol = "tls"
+server_name = "1dot1dot1dot1.cloudflare-dns.com"

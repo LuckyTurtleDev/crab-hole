@@ -1,5 +1,7 @@
 use crate::{
-	CARGO_PKG_NAME, CARGO_PKG_VERSION, blocklist::{BlockList, FailedList, ListType, QueryInfo}, config::ApiConfig
+	blocklist::{BlockList, FailedList, ListType, QueryInfo},
+	config::ApiConfig,
+	CARGO_PKG_NAME, CARGO_PKG_VERSION
 };
 use anyhow::Context;
 use log::{error, info};

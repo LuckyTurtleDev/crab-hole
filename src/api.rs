@@ -20,15 +20,6 @@ use std::{
 };
 use time::OffsetDateTime;
 
-#[derive(Debug, Deserialize, Object)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct Config {
-	pub listener: String,
-	#[serde(default)]
-	pub show_doc: bool,
-	pub admin_key: Option<String>
-}
-
 #[derive(Debug, Object)]
 #[oai(example = true)]
 struct Info {
@@ -192,7 +183,7 @@ impl Api {
 
 /// start api/web server if config is Some
 pub(crate) async fn init(
-	config: Option<Config>,
+	config: Option<ApiConfig>,
 	stats: crate::Stats,
 	blocklist: Arc<BlockList>
 ) -> anyhow::Result<()> {

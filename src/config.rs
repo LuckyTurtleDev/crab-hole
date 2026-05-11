@@ -8,8 +8,18 @@ use hickory_resolver::config::{
 	ConnectionConfig, NameServerConfig, ProtocolConfig, ResolverOpts
 };
 use hickory_server::store::forwarder::ForwardConfig;
+use poem_openapi::Object;
 use serde::Deserialize;
 use url::Url;
+
+#[derive(Debug, Deserialize, Object)]
+#[serde(deny_unknown_fields)]
+pub struct ApiConfig {
+	pub listener: String,
+	#[serde(default)]
+	pub show_doc: bool,
+	pub admin_key: Option<String>
+}
 
 // downstream configs
 
@@ -83,7 +93,7 @@ pub struct Config {
 	pub downstream: Vec<DownstreamConfig>,
 	#[serde(default)]
 	pub blocklist: BlockConfig,
-	pub api: Option<crate::api::Config>
+	pub api: Option<ApiConfig>
 }
 
 #[derive(Debug, Default, Deserialize)]

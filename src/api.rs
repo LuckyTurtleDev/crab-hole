@@ -1,6 +1,5 @@
 use crate::{
-	blocklist::{BlockList, FailedList, ListType, QueryInfo},
-	CARGO_PKG_NAME, CARGO_PKG_VERSION
+	CARGO_PKG_NAME, CARGO_PKG_VERSION, blocklist::{BlockList, FailedList, ListType, QueryInfo}, config::ApiConfig
 };
 use anyhow::Context;
 use log::{error, info};
@@ -12,7 +11,6 @@ use poem_openapi::{
 	types::Example,
 	Object, OpenApi, OpenApiService, SecurityScheme
 };
-use serde::Deserialize;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},

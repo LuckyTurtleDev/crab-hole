@@ -11,7 +11,7 @@ extern crate test;
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 mod api;
-mod config;
+pub mod config;
 mod logger;
 mod parser;
 
